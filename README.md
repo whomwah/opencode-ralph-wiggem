@@ -1,4 +1,4 @@
-# Ralph Wiggum Plugin for OpenCode
+# Ralph Wiggum Plugin for OpenCode (⚠️ work in progress, use at your own risk ⚠️)
 
 Implementation of the Ralph Wiggum technique for iterative, self-referential AI development loops in OpenCode.
 
