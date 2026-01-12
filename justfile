@@ -24,6 +24,14 @@ build-all: build build-types
 typecheck:
     tsc --noEmit
 
+# Format all files with Prettier
+format:
+    bun run format
+
+# Check formatting without modifying files
+format-check:
+    bun run format:check
+
 # Watch mode - rebuilds on changes
 dev:
     bun run build --watch

@@ -22,12 +22,22 @@ bun run link:local      # Symlink to ~/.config/opencode/plugin/
 ```
 
 ### Testing
+
 No test suite exists. When adding tests:
+
 - Use Bun's built-in test runner: `bun test`
 - Run single test file: `bun test path/to/file.test.ts`
 - Run tests matching pattern: `bun test --filter "pattern"`
 
+### Formatting
+
+```bash
+bun run format          # Format all files with Prettier
+bun run format:check    # Check formatting without modifying
+```
+
 ### Linting
+
 No linter configured. If adding one, prefer Biome or ESLint.
 
 ## Project Structure
@@ -44,6 +54,7 @@ tsconfig.json         # TypeScript config (ESNext, strict, bundler resolution)
 ### Imports
 
 Order by category, use `type` keyword for type-only imports:
+
 ```typescript
 // External packages first
 import { type Plugin, tool } from "@opencode-ai/plugin"
@@ -54,83 +65,13 @@ import * as path from "path"
 
 ### Naming Conventions
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Constants | SCREAMING_SNAKE_CASE | `RALPH_STATE_FILE` |
-| Interfaces | PascalCase | `RalphState` |
-| Functions | camelCase | `readState`, `writeState` |
-| Plugin export | PascalCase | `RalphWiggumPlugin` |
-| Tool names | kebab-case | `ralph-loop`, `cancel-ralph` |
-
-### Types and Interfaces
-
-```typescript
-// Define interfaces for state/data structures
-interface RalphState {
-  active: boolean
-  iteration: number
-  maxIterations: number
-  completionPromise: string | null  // Use null over undefined
-  prompt: string
-  sessionId: string | null
-  startedAt: string
-}
-
-// Use explicit return types
-function readState(directory: string): RalphState | null { ... }
-function writeState(directory: string, state: RalphState): void { ... }
-```
-
-### Error Handling
-
-```typescript
-// Empty catch blocks for non-critical operations
-try {
-  if (fs.existsSync(statePath)) {
-    return JSON.parse(fs.readFileSync(statePath, "utf-8"))
-  }
-} catch {
-  // State file corrupted or missing
-}
-return null
-
-// Return early on error conditions
-if (!prompt || prompt.trim() === "") {
-  return "Error: No prompt provided."
-}
-
-// Log errors via OpenCode client API
-await client.app.log({
-  body: {
-    service: "ralph-wiggum",
-    level: "error",
-    message: `Ralph loop: Failed - ${error}`,
-  },
-})
-```
-
-### OpenCode Plugin API Patterns
-
-```typescript
-// Plugin structure
-export const RalphWiggumPlugin: Plugin = async (ctx) => {
-  const { directory, client } = ctx
-
-  return {
-    event: async ({ event }) => { ... },
-    tool: {
-      "tool-name": tool({
-        description: "Tool description",
-        args: {
-          param: tool.schema.string().describe("Description"),
-          optional: tool.schema.number().optional().describe("Optional"),
-        },
-        async execute(args, toolCtx) { ... },
-      }),
-    },
-  }
-}
-```
+| Type          | Convention           | Example                      |
+| ------------- | -------------------- | ---------------------------- |
+| Constants     | SCREAMING_SNAKE_CASE | `RALPH_STATE_FILE`           |
+| Interfaces    | PascalCase           | `RalphState`                 |
+| Functions     | camelCase            | `readState`, `writeState`    |
+| Plugin export | PascalCase           | `RalphWiggumPlugin`          |
+| Tool names    | kebab-case           | `ralph-loop`, `cancel-ralph` |
 
 ### Formatting
 
@@ -141,78 +82,25 @@ export const RalphWiggumPlugin: Plugin = async (ctx) => {
 
 ### State Management
 
-State stored at `.opencode/ralph-loop.local.json`:
-```typescript
-// Always create parent directories before writing
-const dir = path.dirname(statePath)
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir, { recursive: true })
-}
-fs.writeFileSync(statePath, JSON.stringify(state, null, 2))
-```
-
-## Dependencies
-
-- `@opencode-ai/plugin` - OpenCode plugin SDK (peer dependency)
-- `@types/bun` - Bun type definitions (dev)
-- `typescript` - TypeScript compiler (dev)
+State stored at `.opencode/ralph-loop.local.json`. Always create parent directories before writing.
 
 ## How OpenCode Discovers Plugins
 
 OpenCode loads plugins from two locations at startup:
 
-| Location | Scope | Path |
-|----------|-------|------|
-| Global | All projects | `~/.config/opencode/plugin/` |
-| Project | Single project | `.opencode/plugin/` |
+| Location | Scope          | Path                         |
+| -------- | -------------- | ---------------------------- |
+| Global   | All projects   | `~/.config/opencode/plugin/` |
+| Project  | Single project | `.opencode/plugin/`          |
 
-### Local Development via Symlinks
+The `link:local` script symlinks `dist/index.js` to the global plugin directory. We link to `dist/` (not `src/`) because the build bundles all dependencies.
 
-The `link:local` and `link:project` scripts create symbolic links to the **built output**:
+**After making changes**: Run `bun run build`, then restart OpenCode.
 
-```bash
-# link:local creates:
-~/.config/opencode/plugin/ralph-wiggum.js -> /path/to/repo/dist/index.js
+## Commit Messages
 
-# link:project creates:
-.opencode/plugin/ralph-wiggum.js -> /path/to/repo/dist/index.js
-```
+Use Semantic Commit Message style: `type(scope): subject`
 
-**Why link to dist/ instead of src/?**
-The build step (`bun run build`) bundles all dependencies into a single file. Linking directly to the TypeScript source would fail because OpenCode's plugin loader doesn't have access to the project's `node_modules` dependencies.
-
-**How it works**:
-1. OpenCode scans plugin directories for `.js` or `.ts` files
-2. Finds the symlink (e.g., `ralph-wiggum.js`)
-3. Follows symlink to the bundled output in `dist/`
-4. All dependencies are already bundled, so the plugin loads successfully
-5. Plugin exports are registered with OpenCode
-
-**Important**: Plugins load once at startup. After making changes:
-1. Run `bun run build` to rebuild
-2. Restart OpenCode to pick up changes
-
-### npm vs Local Loading
-
-| Method | How OpenCode finds it |
-|--------|----------------------|
-| npm (`opencode.json`) | Downloaded to `~/.cache/opencode/node_modules/`, loaded via package name |
-| Local file | Loaded directly from plugin directory (or symlink target) |
-
-## Common Tasks
-
-### Adding a New Tool
-
-1. Add to the `tool` object in the plugin return value
-2. Use `tool()` helper with description, args, and execute
-3. Tool names should be kebab-case
-4. Return string messages for user feedback
-
-### Testing Changes Locally
-
-1. Run `bun run link:local` to create symlink (only needed once)
-2. Start/restart OpenCode - it discovers the plugin via symlink
-3. Make changes to `src/index.ts`
-4. Run `bun run build` to rebuild
-5. Restart OpenCode to pick up changes
-6. Run `bun run typecheck` to verify types
+- **type**: feat, fix, docs, style, refactor, test, chore
+- **scope**: Optional area affected
+- **subject**: Imperative mood, lowercase, no period

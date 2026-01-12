@@ -56,19 +56,19 @@ function extractPromiseText(text: string): string | null {
   return null
 }
 
-export const RalphWiggumPlugin: Plugin = async (ctx) => {
+const RalphWiggumPlugin: Plugin = async (ctx) => {
   const { directory, client } = ctx
 
   // Helper to check if completion promise is in any message parts
   async function checkCompletionInSession(
     sessionId: string,
-    completionPromise: string
+    completionPromise: string,
   ): Promise<boolean> {
     try {
       const messagesResult = await client.session.messages({
         path: { id: sessionId },
       })
-      
+
       if (!messagesResult.data) return false
 
       // Check the last few assistant messages for completion promise
@@ -76,7 +76,7 @@ export const RalphWiggumPlugin: Plugin = async (ctx) => {
       for (let i = messages.length - 1; i >= Math.max(0, messages.length - 5); i--) {
         const msg = messages[i]
         if (msg.info.role !== "assistant") continue
-        
+
         for (const part of msg.parts) {
           if (part.type === "text" && typeof part.text === "string") {
             const promiseText = extractPromiseText(part.text)
@@ -130,14 +130,14 @@ export const RalphWiggumPlugin: Plugin = async (ctx) => {
               message: `Ralph loop: Detected <promise>${state.completionPromise}</promise> - loop complete!`,
             },
           })
-          
+
           await client.tui.showToast({
             body: {
               message: `Ralph loop completed after ${state.iteration} iterations!`,
               variant: "success",
             },
           })
-          
+
           await removeState(directory)
           return
         }
@@ -152,14 +152,14 @@ export const RalphWiggumPlugin: Plugin = async (ctx) => {
             message: `Ralph loop: Max iterations (${state.maxIterations}) reached.`,
           },
         })
-        
+
         await client.tui.showToast({
           body: {
             message: `Ralph loop: Max iterations (${state.maxIterations}) reached.`,
             variant: "warning",
           },
         })
-        
+
         await removeState(directory)
         return
       }
@@ -268,7 +268,11 @@ Example: Start a loop to build a REST API that runs until "DONE" is output.`,
 
 Iteration: 1
 Max iterations: ${maxIterations > 0 ? maxIterations : "unlimited"}
-Completion promise: ${completionPromise ? `${completionPromise} (ONLY output when TRUE - do not lie!)` : "none (runs forever)"}
+Completion promise: ${
+            completionPromise
+              ? `${completionPromise} (ONLY output when TRUE - do not lie!)`
+              : "none (runs forever)"
+          }
 
 The loop is now active. When the session becomes idle, the SAME PROMPT will be
 fed back to you. You'll see your previous work in files, creating a
@@ -350,12 +354,9 @@ ${state.prompt}`
       }),
 
       "ralph-check-completion": tool({
-        description:
-          "Check if the completion promise has been fulfilled in the given text",
+        description: "Check if the completion promise has been fulfilled in the given text",
         args: {
-          text: tool.schema
-            .string()
-            .describe("The text to check for completion promise"),
+          text: tool.schema.string().describe("The text to check for completion promise"),
         },
         async execute(args) {
           const state = await readState(directory)
@@ -386,3 +387,5 @@ Loop continues at iteration ${state.iteration}.`
     },
   }
 }
+
+export { RalphWiggumPlugin }

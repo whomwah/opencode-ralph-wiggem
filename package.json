@@ -21,6 +21,8 @@
     "prepublishOnly": "bun run build && bun run build:types",
     "dev": "bun run build --watch",
     "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "link:local": "mkdir -p ~/.config/opencode/plugin && ln -sf $(pwd)/dist/index.js ~/.config/opencode/plugin/ralph-wiggum.js",
     "link:project": "mkdir -p .opencode/plugin && ln -sf $(pwd)/dist/index.js .opencode/plugin/ralph-wiggum.js",
     "unlink:local": "rm -f ~/.config/opencode/plugin/ralph-wiggum.js",
@@ -47,6 +49,7 @@
   "devDependencies": {
     "@opencode-ai/plugin": "latest",
     "@types/bun": "latest",
+    "prettier": "^3.7.4",
     "typescript": "^5.0.0"
   },
   "peerDependencies": {

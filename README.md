@@ -24,6 +24,7 @@ ralph-loop("Your task description", completionPromise: "DONE", maxIterations: 50
 ```
 
 This creates a **self-referential feedback loop** where:
+
 - The prompt never changes between iterations
 - The AI's previous work persists in files
 - Each iteration sees modified files and git history
@@ -123,27 +124,28 @@ ralph-wiggum-opencode/
 
 This project uses [just](https://github.com/casey/just) as a command runner. Run `just` to see all available tasks:
 
-| Task | Description |
-|------|-------------|
-| `just install` | Install dependencies |
-| `just build` | Build the plugin for distribution |
-| `just build-types` | Generate TypeScript declarations |
-| `just build-all` | Build everything (code + types) |
-| `just dev` | Watch mode for development |
-| `just typecheck` | Run TypeScript type checking |
-| `just link-local` | Symlink to global OpenCode plugins |
-| `just link-project` | Symlink to current project's plugins |
-| `just unlink-local` | Remove global plugin symlink |
-| `just unlink-project` | Remove project plugin symlink |
-| `just clean` | Clean build artifacts |
-| `just rebuild` | Full rebuild from clean state |
-| `just prepublish` | Prepare for publishing (build + types) |
+| Task                  | Description                            |
+| --------------------- | -------------------------------------- |
+| `just install`        | Install dependencies                   |
+| `just build`          | Build the plugin for distribution      |
+| `just build-types`    | Generate TypeScript declarations       |
+| `just build-all`      | Build everything (code + types)        |
+| `just dev`            | Watch mode for development             |
+| `just typecheck`      | Run TypeScript type checking           |
+| `just link-local`     | Symlink to global OpenCode plugins     |
+| `just link-project`   | Symlink to current project's plugins   |
+| `just unlink-local`   | Remove global plugin symlink           |
+| `just unlink-project` | Remove project plugin symlink          |
+| `just clean`          | Clean build artifacts                  |
+| `just rebuild`        | Full rebuild from clean state          |
+| `just prepublish`     | Prepare for publishing (build + types) |
 
 Alternatively, you can use `bun run <script>` with the npm scripts in `package.json`.
 
 ### Local Development Workflow
 
 1. Clone and install dependencies:
+
    ```bash
    git clone https://github.com/whomwah/ralph-wiggum-opencode.git
    cd ralph-wiggum-opencode
@@ -151,9 +153,11 @@ Alternatively, you can use `bun run <script>` with the npm scripts in `package.j
    ```
 
 2. Link the plugin to OpenCode:
+
    ```bash
    just link-local
    ```
+
    This creates a symlink at `~/.config/opencode/plugin/ralph-wiggum.ts` pointing to `src/index.ts`.
 
 3. (Re)start OpenCode - it will discover and load the plugin from the symlink
@@ -176,6 +180,7 @@ npm publish
 ```
 
 Once published, users can install via their `opencode.json`:
+
 ```json
 {
   "plugin": ["opencode-ralph-wiggum"]
@@ -196,6 +201,7 @@ Call the ralph-loop tool with:
 ```
 
 The AI will:
+
 - Implement the API iteratively
 - Run tests and see failures
 - Fix bugs based on test output
@@ -204,33 +210,35 @@ The AI will:
 
 ### Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `ralph-loop` | Start a Ralph loop with a prompt and optional configuration |
-| `cancel-ralph` | Cancel the active Ralph loop |
-| `ralph-status` | Check the status of the current loop |
-| `ralph-check-completion` | Manually check if text contains the completion promise |
+| Tool                     | Description                                                 |
+| ------------------------ | ----------------------------------------------------------- |
+| `ralph-loop`             | Start a Ralph loop with a prompt and optional configuration |
+| `cancel-ralph`           | Cancel the active Ralph loop                                |
+| `ralph-status`           | Check the status of the current loop                        |
+| `ralph-check-completion` | Manually check if text contains the completion promise      |
 
 ### Tool Parameters
 
 #### ralph-loop
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `prompt` | string | Yes | The task prompt to execute repeatedly |
-| `maxIterations` | number | No | Maximum iterations before auto-stop (0 = unlimited) |
-| `completionPromise` | string | No | Phrase that signals completion when wrapped in `<promise>` tags |
+| Parameter           | Type   | Required | Description                                                     |
+| ------------------- | ------ | -------- | --------------------------------------------------------------- |
+| `prompt`            | string | Yes      | The task prompt to execute repeatedly                           |
+| `maxIterations`     | number | No       | Maximum iterations before auto-stop (0 = unlimited)             |
+| `completionPromise` | string | No       | Phrase that signals completion when wrapped in `<promise>` tags |
 
 ## Prompt Writing Best Practices
 
 ### 1. Clear Completion Criteria
 
 **Bad:**
+
 ```
 Build a todo API and make it good.
 ```
 
 **Good:**
+
 ```
 Build a REST API for todos.
 
@@ -245,11 +253,13 @@ When complete:
 ### 2. Incremental Goals
 
 **Bad:**
+
 ```
 Create a complete e-commerce platform.
 ```
 
 **Good:**
+
 ```
 Phase 1: User authentication (JWT, tests)
 Phase 2: Product catalog (list/search, tests)
@@ -261,11 +271,13 @@ Output <promise>COMPLETE</promise> when all phases done.
 ### 3. Self-Correction
 
 **Bad:**
+
 ```
 Write code for feature X.
 ```
 
 **Good:**
+
 ```
 Implement feature X following TDD:
 1. Write failing tests
@@ -306,26 +318,32 @@ In your prompt, include what to do if stuck:
 Ralph embodies several key principles:
 
 ### 1. Iteration > Perfection
+
 Don't aim for perfect on first try. Let the loop refine the work.
 
 ### 2. Failures Are Data
+
 "Deterministically bad" means failures are predictable and informative. Use them to tune prompts.
 
 ### 3. Operator Skill Matters
+
 Success depends on writing good prompts, not just having a good model.
 
 ### 4. Persistence Wins
+
 Keep trying until success. The loop handles retry logic automatically.
 
 ## When to Use Ralph
 
 **Good for:**
+
 - Well-defined tasks with clear success criteria
 - Tasks requiring iteration and refinement (e.g., getting tests to pass)
 - Greenfield projects where you can walk away
 - Tasks with automatic verification (tests, linters)
 
 **Not good for:**
+
 - Tasks requiring human judgment or design decisions
 - One-shot operations
 - Tasks with unclear success criteria
@@ -335,12 +353,12 @@ Keep trying until success. The loop handles retry logic automatically.
 
 This OpenCode port has some differences from the original Claude Code plugin:
 
-| Feature | Claude Code | OpenCode |
-|---------|-------------|----------|
-| Loop mechanism | Stop hook (shell script) | `session.idle` event |
-| Commands | Slash commands (`/ralph-loop`) | Custom tools |
-| State storage | Markdown frontmatter | JSON file |
-| Loop continuation | Blocks exit + feeds prompt | Sends new prompt via SDK |
+| Feature           | Claude Code                    | OpenCode                 |
+| ----------------- | ------------------------------ | ------------------------ |
+| Loop mechanism    | Stop hook (shell script)       | `session.idle` event     |
+| Commands          | Slash commands (`/ralph-loop`) | Custom tools             |
+| State storage     | Markdown frontmatter           | JSON file                |
+| Loop continuation | Blocks exit + feeds prompt     | Sends new prompt via SDK |
 
 ## Learn More
 
