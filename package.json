@@ -21,10 +21,10 @@
     "prepublishOnly": "bun run build && bun run build:types",
     "dev": "bun run build --watch",
     "typecheck": "tsc --noEmit",
-    "link:local": "mkdir -p ~/.config/opencode/plugin && ln -sf $(pwd)/src/index.ts ~/.config/opencode/plugin/ralph-wiggum.ts",
-    "link:project": "mkdir -p .opencode/plugin && ln -sf $(pwd)/src/index.ts .opencode/plugin/ralph-wiggum.ts",
-    "unlink:local": "rm -f ~/.config/opencode/plugin/ralph-wiggum.ts",
-    "unlink:project": "rm -f .opencode/plugin/ralph-wiggum.ts"
+    "link:local": "mkdir -p ~/.config/opencode/plugin && ln -sf $(pwd)/dist/index.js ~/.config/opencode/plugin/ralph-wiggum.js",
+    "link:project": "mkdir -p .opencode/plugin && ln -sf $(pwd)/dist/index.js .opencode/plugin/ralph-wiggum.js",
+    "unlink:local": "rm -f ~/.config/opencode/plugin/ralph-wiggum.js",
+    "unlink:project": "rm -f .opencode/plugin/ralph-wiggum.js"
   },
   "keywords": [
     "opencode",

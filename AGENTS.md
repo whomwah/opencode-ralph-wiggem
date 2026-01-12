@@ -168,24 +168,29 @@ OpenCode loads plugins from two locations at startup:
 
 ### Local Development via Symlinks
 
-The `link:local` and `link:project` scripts create symbolic links:
+The `link:local` and `link:project` scripts create symbolic links to the **built output**:
 
 ```bash
 # link:local creates:
-~/.config/opencode/plugin/ralph-wiggum.ts -> /path/to/repo/src/index.ts
+~/.config/opencode/plugin/ralph-wiggum.js -> /path/to/repo/dist/index.js
 
 # link:project creates:
-.opencode/plugin/ralph-wiggum.ts -> /path/to/repo/src/index.ts
+.opencode/plugin/ralph-wiggum.js -> /path/to/repo/dist/index.js
 ```
+
+**Why link to dist/ instead of src/?**
+The build step (`bun run build`) bundles all dependencies into a single file. Linking directly to the TypeScript source would fail because OpenCode's plugin loader doesn't have access to the project's `node_modules` dependencies.
 
 **How it works**:
 1. OpenCode scans plugin directories for `.js` or `.ts` files
-2. Finds the symlink (e.g., `ralph-wiggum.ts`)
-3. Follows symlink to the actual source file
-4. Bun executes TypeScript directly (no build step needed for local dev)
+2. Finds the symlink (e.g., `ralph-wiggum.js`)
+3. Follows symlink to the bundled output in `dist/`
+4. All dependencies are already bundled, so the plugin loads successfully
 5. Plugin exports are registered with OpenCode
 
-**Important**: Plugins load once at startup. Restart OpenCode after changes.
+**Important**: Plugins load once at startup. After making changes:
+1. Run `bun run build` to rebuild
+2. Restart OpenCode to pick up changes
 
 ### npm vs Local Loading
 
@@ -208,5 +213,6 @@ The `link:local` and `link:project` scripts create symbolic links:
 1. Run `bun run link:local` to create symlink (only needed once)
 2. Start/restart OpenCode - it discovers the plugin via symlink
 3. Make changes to `src/index.ts`
-4. Restart OpenCode to pick up changes
-5. Run `bun run typecheck` to verify types
+4. Run `bun run build` to rebuild
+5. Restart OpenCode to pick up changes
+6. Run `bun run typecheck` to verify types
