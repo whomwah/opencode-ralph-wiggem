@@ -206,22 +206,30 @@ Once published, users can install via their `opencode.json`:
 
 There are two ways to use Ralph: **direct prompts** for simple tasks, or **plan-based workflow** for structured projects.
 
-### Quick Start: Plan-Based Workflow (Recommended)
+### Quick Start
 
-The easiest way to use Ralph is with a PLAN.md file:
+1. **Create a plan** - Describe what you want to build:
 
-```
-# Step 1: Create a plan (in plan mode for best results)
-You: "Help me create a plan to build a REST API with auth"
-AI: [Creates PLAN.md with structured tasks]
+   ```
+   You: "Use rw-plan with name 'my-api' and description 'Build a REST API for todos'"
+   ```
 
-# Step 2: Start the loop
-You: "Start ralph loop"
-AI: [Uses rw-start, begins iterating through tasks]
+   This creates `.opencode/plans/my-api.md` with a template.
 
-# Step 3: Walk away
-Ralph iterates until all tasks are complete
-```
+2. **Edit the plan** - Add your tasks with checkbox format:
+
+   ```markdown
+   - [ ] **Setup project** - Initialize with TypeScript and tests
+   - [ ] **Add endpoints** - CRUD operations for todos
+   - [ ] **Add auth** - JWT-based authentication
+   ```
+
+3. **Start the loop** - Ralph works through each task:
+   ```
+   You: "rw-start"
+   ```
+
+That's it! Ralph iterates through tasks, marking each complete and committing changes.
 
 ### Creating a Plan
 
@@ -320,16 +328,22 @@ This is useful when you want to:
 
 **Key difference from loop mode**: Single task execution does NOT create git commits automatically. You review the changes and commit manually when satisfied.
 
-### Loop vs Single Task Mode
+### Modes Comparison
 
-| Behavior               | `rw-start` (loop)               | `rw-task` (single)     |
-| ---------------------- | ------------------------------- | ---------------------- |
-| Auto-complete task     | Yes                             | Yes                    |
-| Git commit per task    | Yes                             | No                     |
-| Continues to next task | Yes                             | No                     |
-| Use case               | Walk away, review commits later | Step through carefully |
+| Behavior            | `rw-start` (plan loop)          | `rw-task` (single task) | `rw-loop` (direct loop)   |
+| ------------------- | ------------------------------- | ----------------------- | ------------------------- |
+| Input               | PLAN.md file                    | PLAN.md file            | Direct prompt             |
+| Auto-complete task  | Yes                             | Yes                     | N/A (no tasks)            |
+| Git commit per task | Yes                             | No                      | No                        |
+| Continues to next   | Yes                             | No                      | Same prompt each time     |
+| Stops when          | All tasks complete              | Task complete           | Completion promise found  |
+| Best for            | Walk away, review commits later | Step through carefully  | Iterative problem-solving |
 
-When using `rw-start`, each completed task gets its own git commit (e.g., `feat(ralph): complete task 2 - Core Parser`). This lets you review each task's changes separately in git history.
+**`rw-start`**: Best for structured projects. Creates git commits so you can review each task's changes.
+
+**`rw-task`**: Best for careful, controlled execution. No commits - you review and commit manually.
+
+**`rw-loop`**: Best for hammering at one goal ("make tests pass", "fix the build") until it works.
 
 ### Available Tools
 
