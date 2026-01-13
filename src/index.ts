@@ -89,6 +89,33 @@ function slugify(text: string): string {
     .slice(0, 50) // Limit length
 }
 
+interface ProjectTools {
+  hasJustfile: boolean
+  hasPackageJson: boolean
+  hasMakefile: boolean
+  hasCargoToml: boolean
+}
+
+async function detectProjectTools(directory: string): Promise<ProjectTools> {
+  const checkFile = async (filename: string): Promise<boolean> => {
+    try {
+      const file = Bun.file(path.join(directory, filename))
+      return await file.exists()
+    } catch {
+      return false
+    }
+  }
+
+  const [hasJustfile, hasPackageJson, hasMakefile, hasCargoToml] = await Promise.all([
+    checkFile("justfile"),
+    checkFile("package.json"),
+    checkFile("Makefile"),
+    checkFile("Cargo.toml"),
+  ])
+
+  return { hasJustfile, hasPackageJson, hasMakefile, hasCargoToml }
+}
+
 async function readPlanFile(directory: string, planFile: string): Promise<string | null> {
   const planPath = path.isAbsolute(planFile) ? planFile : path.join(directory, planFile)
   try {
@@ -288,11 +315,25 @@ function generateSingleTaskPrompt(
   task: PlanTask,
   taskNum: number,
   isLoopMode: boolean,
+  projectTools?: ProjectTools,
 ): string {
   let prompt = `# ${plan.title || "Project Plan"}\n\n`
 
   if (plan.overview) {
     prompt += `## Project Context\n${plan.overview}\n\n`
+  }
+
+  // Show available project tools
+  if (projectTools) {
+    const tools: string[] = []
+    if (projectTools.hasJustfile) tools.push("`just` (justfile)")
+    if (projectTools.hasPackageJson) tools.push("`npm`/`bun` (package.json)")
+    if (projectTools.hasMakefile) tools.push("`make` (Makefile)")
+    if (projectTools.hasCargoToml) tools.push("`cargo` (Cargo.toml)")
+
+    if (tools.length > 0) {
+      prompt += `## Available Tools\nThis project has: ${tools.join(", ")}\n\n`
+    }
   }
 
   // Show progress overview
@@ -617,7 +658,8 @@ const RalphWiggumPlugin: Plugin = async (ctx) => {
         state.currentTaskNum = nextTaskNum
         await writeState(directory, state)
 
-        const taskPrompt = generateSingleTaskPrompt(plan, nextTask, nextTaskNum, true)
+        const projectTools = await detectProjectTools(directory)
+        const taskPrompt = generateSingleTaskPrompt(plan, nextTask, nextTaskNum, true, projectTools)
         const completedCount = plan.tasks.filter((t) => t.status === "completed").length
 
         const systemMsg = `🔄 Ralph iteration ${state.iteration} | Task ${nextTaskNum}/${plan.tasks.length} (${completedCount} complete)`
@@ -1164,11 +1206,23 @@ No git commit is created - you can review the changes and commit manually.`,
           }
           await writeState(directory, state)
 
+          // Detect project tools for the prompt
+          const projectTools = await detectProjectTools(directory)
+          const toolsInfo: string[] = []
+          if (projectTools.hasJustfile) toolsInfo.push("`just` (justfile)")
+          if (projectTools.hasPackageJson) toolsInfo.push("`npm`/`bun` (package.json)")
+          if (projectTools.hasMakefile) toolsInfo.push("`make` (Makefile)")
+          if (projectTools.hasCargoToml) toolsInfo.push("`cargo` (Cargo.toml)")
+          const toolsSection =
+            toolsInfo.length > 0
+              ? `\n## Available Tools\nThis project has: ${toolsInfo.join(", ")}\n`
+              : ""
+
           // Generate a focused prompt for this single task
           const taskPrompt = `# Single Task Execution
 
 **Plan:** ${plan.title || planFile}
-
+${toolsSection}
 ## Current Task
 
 **${task.title}**
@@ -1310,8 +1364,15 @@ To get started:
           const firstTask = plan.tasks[firstPendingIdx]
           const firstTaskNum = firstPendingIdx + 1
 
-          // Build a prompt focused on the current task
-          const taskPrompt = generateSingleTaskPrompt(plan, firstTask, firstTaskNum, true)
+          // Detect project tools and build a prompt focused on the current task
+          const projectTools = await detectProjectTools(directory)
+          const taskPrompt = generateSingleTaskPrompt(
+            plan,
+            firstTask,
+            firstTaskNum,
+            true,
+            projectTools,
+          )
           const completionPromise = plan.completionPromise || null
           const sessionId = (toolCtx as { sessionId?: string })?.sessionId || null
 
