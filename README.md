@@ -10,25 +10,40 @@ The technique is named after Ralph Wiggum from The Simpsons, embodying the philo
 
 ### Core Concept
 
-This plugin implements Ralph using OpenCode's `session.idle` event that detects when the AI finishes:
+This plugin implements Ralph using OpenCode's `session.idle` event. When the AI finishes, the plugin checks progress and either continues or stops.
 
-```
-# You invoke the rw-loop tool:
-rw-loop("Your task description", completionPromise: "DONE", maxIterations: 50)
+**Two modes of operation:**
 
-# Then OpenCode automatically:
-# 1. Works on the task
-# 2. Session becomes idle
-# 3. Plugin intercepts and feeds the SAME prompt back
-# 4. Repeat until completion promise detected or max iterations
-```
+1. **Plan-based** (`rw-start`): Work through a list of tasks, marking each complete
+2. **Direct loop** (`rw-loop`): Hammer at one goal until it succeeds
 
-This creates a **self-referential feedback loop** where:
+Both create a **self-referential feedback loop** where:
 
-- The prompt never changes between iterations
 - The AI's previous work persists in files
-- Each iteration sees modified files and git history
-- The AI autonomously improves by reading its own past work in files
+- Each iteration sees modified files and output from earlier attempts
+- The AI iteratively improves by building on its own work
+
+**Plan-based mode** - for structured projects:
+
+```
+# Create PLAN.md with tasks, then:
+rw-start
+
+# Loop works through tasks one by one
+# Stops when: all tasks marked [x] OR maxIterations reached
+```
+
+**Direct loop mode** - for iterative problem-solving:
+
+```
+# Start a loop that keeps trying until success:
+rw-loop("Make all tests pass", completionPromise: "ALL_TESTS_PASSING", maxIterations: 20)
+
+# Same prompt fed back each iteration
+# Stops when: <promise>ALL_TESTS_PASSING</promise> output OR maxIterations reached
+```
+
+The direct loop is ideal for tasks like "fix the build", "make tests pass", or "get this working" where you want the AI to keep iterating on the same problem until solved.
 
 ## Installation
 
@@ -237,8 +252,6 @@ You: "Use rw-plan to create a plan for building a REST API"
 ```markdown
 # Markdown CLI Tool
 
-<!-- completion_promise: ALL_TASKS_COMPLETE -->
-
 ## Overview
 
 Build a CLI tool that converts markdown files to styled HTML.
@@ -269,10 +282,6 @@ Target: Node.js, TypeScript, published to npm.
 - [ ] **Documentation**
       Write README with usage examples.
       Add --help output.
-
-## Completion
-
-When ALL tasks are complete, output: <promise>ALL_TASKS_COMPLETE</promise>
 ```
 
 ### Starting a Ralph Loop
@@ -285,7 +294,7 @@ You: "Start ralph loop"
 You: "Use rw-start"
 ```
 
-Ralph reads PLAN.md, builds a prompt from your tasks, and iterates until done.
+Ralph reads PLAN.md, works through each task, and stops when all tasks are marked complete.
 
 **Direct prompt (for simple tasks):**
 
@@ -367,10 +376,12 @@ When using `rw-start`, each completed task gets its own git commit (e.g., `feat(
 
 #### rw-loop
 
+Direct loop mode - keeps feeding the same prompt until completion or max iterations. Ideal for iterative problem-solving like "make tests pass" or "fix the build".
+
 | Parameter           | Type   | Required | Description                                                     |
 | ------------------- | ------ | -------- | --------------------------------------------------------------- |
 | `prompt`            | string | Yes      | The task prompt to execute repeatedly                           |
-| `maxIterations`     | number | No       | Maximum iterations before auto-stop (0 = unlimited)             |
+| `maxIterations`     | number | No       | Maximum iterations before stopping (0 = unlimited)              |
 | `completionPromise` | string | No       | Phrase that signals completion when wrapped in `<promise>` tags |
 
 ## Plan File Format
@@ -379,8 +390,6 @@ The PLAN.md file uses simple markdown:
 
 ```markdown
 # Project Title
-
-<!-- Optional: completion_promise: YOUR_PROMISE -->
 
 ## Overview
 
@@ -396,21 +405,20 @@ Project context and goals (helps AI make better decisions).
 
 - [x] **Completed Task**
       Already done tasks use [x].
-
-## Completion
-
-Instructions for what to output when done.
 ```
 
 ### Key Elements
 
 1. **Title**: First `# Heading` becomes the plan title
-2. **Completion Promise**: Set via `completion_promise: TEXT` comment
-3. **Overview**: Context section helps AI understand the project
-4. **Tasks**: Use `- [ ]` checkbox format, bold titles recommended
-5. **Task Descriptions**: Indent with 2+ spaces under the task line
+2. **Overview**: Context section helps AI understand the project
+3. **Tasks**: Use `- [ ]` checkbox format, bold titles recommended
+4. **Task Descriptions**: Indent with 2+ spaces under the task line
+
+**Note**: The `completion_promise` comment is optional and used with the legacy `rw-loop` tool. For plan-based workflows (`rw-start`, `rw-task`), completion is determined by task checkboxes.
 
 ## Prompt Writing Best Practices
+
+These tips are especially useful for the direct `rw-loop` mode where you're iterating on a single goal.
 
 ### 1. Clear Completion Criteria
 
@@ -430,7 +438,6 @@ When complete:
 - Input validation in place
 - Tests passing (coverage > 80%)
 - README with API docs
-- Output: <promise>COMPLETE</promise>
 ```
 
 ### 2. Incremental Goals
@@ -447,8 +454,6 @@ Create a complete e-commerce platform.
 Phase 1: User authentication (JWT, tests)
 Phase 2: Product catalog (list/search, tests)
 Phase 3: Shopping cart (add/remove, tests)
-
-Output <promise>COMPLETE</promise> when all phases done.
 ```
 
 ### 3. Self-Correction
@@ -469,32 +474,45 @@ Implement feature X following TDD:
 4. If any fail, debug and fix
 5. Refactor if needed
 6. Repeat until all green
-7. Output: <promise>COMPLETE</promise>
 ```
 
-### 4. Escape Hatches
+### 4. Safety Limits
 
-Always use `maxIterations` as a safety net to prevent infinite loops:
+Always use `maxIterations` as a safety net to prevent runaway loops:
 
 ```
-In your prompt, include what to do if stuck:
-"After 15 iterations, if not complete:
- - Document what's blocking progress
- - List what was attempted
- - Suggest alternative approaches"
+rw-loop with maxIterations: 20
 ```
+
+When maxIterations is reached, the loop **stops completely** - it does not continue to the next task. This is intentional: if a task isn't completing within the expected iterations, human review is needed.
 
 ## How It Works
 
-1. **Loop Activation**: When you call `rw-loop`, the plugin creates a state file at `.opencode/ralph-loop.local.json`
+### Plan-Based Mode (rw-start, rw-task)
 
-2. **Session Monitoring**: The plugin listens for the `session.idle` event which fires when the AI finishes its response
+1. **Loop Activation**: When you call `rw-start`, the plugin reads PLAN.md and creates a state file at `.opencode/ralph-loop.local.json`
 
-3. **Completion Check**: Before continuing, it checks if the completion promise was output in the last assistant message
+2. **Task Execution**: The plugin generates a prompt for the first pending task and sends it to the AI
 
-4. **Loop Continuation**: If not complete and under max iterations, it sends the same prompt back using `session.prompt`
+3. **Session Monitoring**: The plugin listens for the `session.idle` event which fires when the AI finishes its response
 
-5. **State Management**: Iteration count and other state is persisted to handle crashes/restarts
+4. **Task Completion**: When idle, the plugin marks the current task as `[x]` in PLAN.md and (in loop mode) creates a git commit
+
+5. **Loop Continuation**: The plugin finds the next pending task and sends a new prompt. If no pending tasks remain, the loop ends.
+
+6. **Safety Stop**: If `maxIterations` is reached before all tasks complete, the loop halts entirely for human review
+
+### Direct Loop Mode (rw-loop)
+
+1. **Loop Activation**: When you call `rw-loop`, the plugin stores your prompt and creates a state file
+
+2. **Same Prompt Each Time**: Unlike plan-based mode, the exact same prompt is fed back each iteration
+
+3. **Completion Detection**: The plugin checks the AI's output for `<promise>YOUR_TEXT</promise>` tags matching your completion promise
+
+4. **Iterative Improvement**: The AI sees files modified by previous attempts, allowing it to build on its own work
+
+5. **Stops When**: The completion promise is detected OR maxIterations is reached
 
 ## Philosophy
 
@@ -518,17 +536,23 @@ Keep trying until success. The loop handles retry logic automatically.
 
 ## When to Use Ralph
 
-**Good for:**
+### Plan-based mode (`rw-start`) is good for:
 
-- Well-defined tasks with clear success criteria
-- Tasks requiring iteration and refinement (e.g., getting tests to pass)
-- Greenfield projects where you can walk away
-- Tasks with automatic verification (tests, linters)
+- Multi-step projects with distinct phases
+- Greenfield development where you want git commits per task
+- Projects where you want to review progress task-by-task
 
-**Not good for:**
+### Direct loop mode (`rw-loop`) is good for:
+
+- "Make the tests pass" - iterate until green
+- "Fix the build errors" - hammer until it compiles
+- Bug hunting - keep trying fixes until resolved
+- Any goal with clear, verifiable success criteria
+
+### Not good for:
 
 - Tasks requiring human judgment or design decisions
-- One-shot operations
+- One-shot operations that don't benefit from iteration
 - Tasks with unclear success criteria
 - Production debugging (use targeted debugging instead)
 
