@@ -177,14 +177,15 @@ async function markTaskCompleteAndCommit(
   }
 
   const task = plan.tasks[taskNum - 1]
-  if (task.status === "completed") {
-    return { taskTitle: task.title }
+  const alreadyCompleted = task.status === "completed"
+
+  // Update the plan file if not already complete
+  if (!alreadyCompleted) {
+    const updatedContent = updateTaskStatus(content, task.id, plan.tasks, "completed")
+    await writePlanFile(directory, planFile, updatedContent)
   }
 
-  // Update the plan file
-  const updatedContent = updateTaskStatus(content, task.id, plan.tasks, "completed")
-  await writePlanFile(directory, planFile, updatedContent)
-
+  // Create commit if requested (even if task was already marked complete)
   let commitResult: { success: boolean; message: string } | undefined
   if (shouldCommit) {
     commitResult = await createGitCommit(directory, task.title, taskNum)
