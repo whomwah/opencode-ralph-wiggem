@@ -827,8 +827,8 @@ Example: Start a loop to build a REST API that runs until "DONE" is output.`,
             return `Error: A Ralph loop is already active (iteration ${existingState.iteration}). Use the rw-cancel tool to cancel it first.`
           }
 
-          // Get session ID from tool context if available
-          const sessionId = (toolCtx as { sessionId?: string })?.sessionId || null
+          // Get session ID from tool context
+          const sessionId = (toolCtx as { sessionID?: string })?.sessionID || null
 
           // Create state file
           const state: RalphState = {
@@ -1207,7 +1207,7 @@ No git commit is created - you can review the changes and commit manually.`,
           }
 
           // Get session ID from tool context
-          const sessionId = (toolCtx as { sessionId?: string })?.sessionId || null
+          const sessionId = (toolCtx as { sessionID?: string })?.sessionID || null
 
           // Create state for single-task mode
           const state: RalphState = {
@@ -1393,7 +1393,7 @@ To get started:
             projectTools,
           )
           const completionPromise = plan.completionPromise || null
-          const sessionId = (toolCtx as { sessionId?: string })?.sessionId || null
+          const sessionId = (toolCtx as { sessionID?: string })?.sessionID || null
 
           // Create state with loop mode
           const state: RalphState = {

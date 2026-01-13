@@ -250,6 +250,13 @@ Or use the `rw-plan` tool:
 You: "Use rw-plan to create a plan for building a REST API"
 ```
 
+The `rw-plan` workflow:
+
+1. Call with `action='create'` and a name/description to get the target file path
+2. Generate an appropriate plan and show it to the user
+3. User may request changes - refine the plan in conversation
+4. When approved, call with `action='save'` and `content=<the plan>` to write to disk
+
 ### Example PLAN.md
 
 ```markdown
@@ -372,10 +379,11 @@ This is useful when you want to:
 
 | Parameter     | Type   | Required | Description                                                        |
 | ------------- | ------ | -------- | ------------------------------------------------------------------ |
-| `action`      | string | No       | 'create' or 'view' (default: create)                               |
+| `action`      | string | No       | 'create', 'view', or 'save' (default: create)                      |
 | `name`        | string | No       | Plan name - used to generate filename (e.g., 'My API' → my-api.md) |
 | `description` | string | No       | Project description (also used for filename if no name)            |
 | `file`        | string | No       | Explicit file path (overrides auto-generated name)                 |
+| `content`     | string | No       | Plan content to save (required when action='save')                 |
 
 Filename generation priority:
 
@@ -400,7 +408,7 @@ Direct loop mode - keeps feeding the same prompt until completion or max iterati
 | Parameter           | Type   | Required | Description                                                     |
 | ------------------- | ------ | -------- | --------------------------------------------------------------- |
 | `prompt`            | string | Yes      | The task prompt to execute repeatedly                           |
-| `maxIterations`     | number | No       | Maximum iterations before stopping (0 = unlimited)              |
+| `maxIterations`     | number | No       | Maximum iterations before stopping (default: 2, 0 = unlimited)  |
 | `completionPromise` | string | No       | Phrase that signals completion when wrapped in `<promise>` tags |
 
 ## Plan File Format
