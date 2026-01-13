@@ -126,14 +126,9 @@ just build
 ### Project Structure
 
 ```
-raopencode-lph-wiggum-
+opencode-ralph-wiggum/
 ├── src/
 │   └── index.ts          # Main plugin source
-├── templates/            # Plan templates for different scenarios
-│   ├── README.md         # Template index and usage guide
-│   ├── minimal.md        # Bare-bones template
-│   ├── bug-hunt.md       # Iterative debugging template
-│   └── rest-api.md       # REST API project template
 ├── dist/                 # Built output (generated)
 ├── package.json
 ├── tsconfig.json
@@ -354,25 +349,35 @@ When using `rw-start`, each completed task gets its own git commit (e.g., `feat(
 
 #### rw-start
 
-| Parameter       | Type   | Required | Description                             |
-| --------------- | ------ | -------- | --------------------------------------- |
-| `file`          | string | No       | Plan file path (default: PLAN.md)       |
-| `maxIterations` | number | No       | Max iterations (default: 0 = unlimited) |
+| Parameter       | Type   | Required | Description                                       |
+| --------------- | ------ | -------- | ------------------------------------------------- |
+| `file`          | string | No       | Plan file path (default: .opencode/plans/PLAN.md) |
+| `maxIterations` | number | No       | Max iterations (default: 0 = unlimited)           |
 
 #### rw-plan
 
-| Parameter     | Type   | Required | Description                               |
-| ------------- | ------ | -------- | ----------------------------------------- |
-| `action`      | string | No       | 'create' or 'view' (default: create)      |
-| `description` | string | No       | Project description to customize template |
-| `file`        | string | No       | Plan file path (default: PLAN.md)         |
+| Parameter     | Type   | Required | Description                                                        |
+| ------------- | ------ | -------- | ------------------------------------------------------------------ |
+| `action`      | string | No       | 'create' or 'view' (default: create)                               |
+| `name`        | string | No       | Plan name - used to generate filename (e.g., 'My API' → my-api.md) |
+| `description` | string | No       | Project description (also used for filename if no name)            |
+| `file`        | string | No       | Explicit file path (overrides auto-generated name)                 |
+
+Filename generation priority:
+
+1. Explicit `file` parameter if provided
+2. Slugified `name` parameter
+3. Slugified `description` parameter
+4. Falls back to "plan.md"
+
+All plans are stored in `.opencode/plans/` by default.
 
 #### rw-task
 
-| Parameter | Type   | Required | Description                       |
-| --------- | ------ | -------- | --------------------------------- |
-| `task`    | string | Yes      | Task number (1, 2, 3...) or name  |
-| `file`    | string | No       | Plan file path (default: PLAN.md) |
+| Parameter | Type   | Required | Description                                       |
+| --------- | ------ | -------- | ------------------------------------------------- |
+| `task`    | string | Yes      | Task number (1, 2, 3...) or name                  |
+| `file`    | string | No       | Plan file path (default: .opencode/plans/PLAN.md) |
 
 #### rw-loop
 
