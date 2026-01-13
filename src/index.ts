@@ -970,9 +970,9 @@ Loop continues at iteration ${state.iteration}.`
         description: `Create or view a PLAN.md file for structured task management.
 
 Usage:
-- Without arguments: Creates a new plan.md from template
-- With 'view': Shows the current plan and its tasks
-- With name/description: Creates a plan with auto-generated filename
+- 'create': Prepares a plan (returns target path - you generate and show the plan content to the user)
+- 'view': Shows the current plan and its tasks
+- 'save': Saves the provided content to the plan file
 
 The plan file uses a simple markdown format with checkboxes for tasks.
 You can set a completion_promise in the file that Ralph will use.
@@ -985,12 +985,26 @@ Filename generation (in priority order):
 
 Plans are stored in .opencode/plans/ by default, allowing multiple named plans.
 
-Example: rw-plan with name "REST API" creates .opencode/plans/rest-api.md`,
+WORKFLOW:
+1. User asks for a plan (e.g., "Create a plan for a REST API")
+2. Call rw-plan with action='create' and name/description to get the target file path
+3. Generate an appropriate plan based on the user's request and show it to them
+4. User may request changes - refine the plan in conversation
+5. When user approves, call rw-plan with action='save' and content=<the plan>
+
+PLAN FORMAT:
+The plan should be markdown with:
+- # Title
+- ## Overview section with project context
+- ## Tasks section with checkbox items: - [ ] **Task title**
+- Optional: completion_promise: SOME_PHRASE (for auto-completion detection)`,
         args: {
           action: tool.schema
             .string()
             .optional()
-            .describe("Action: 'create', 'view', or leave empty for create"),
+            .describe(
+              "Action: 'create' (prepare plan), 'view' (show existing), 'save' (write to disk)",
+            ),
           name: tool.schema
             .string()
             .optional()
@@ -998,13 +1012,15 @@ Example: rw-plan with name "REST API" creates .opencode/plans/rest-api.md`,
           description: tool.schema
             .string()
             .optional()
-            .describe(
-              "Project description to customize the plan template (also used for filename if no name)",
-            ),
+            .describe("Project description (also used for filename if no name)"),
           file: tool.schema
             .string()
             .optional()
             .describe(`Explicit plan file path (overrides auto-generated name)`),
+          content: tool.schema
+            .string()
+            .optional()
+            .describe("Plan content to save (required when action='save')"),
         },
         async execute(args) {
           // Generate filename: file > name > description > "plan.md"
@@ -1046,36 +1062,40 @@ Example: rw-plan with name "REST API" creates .opencode/plans/rest-api.md`,
             return output
           }
 
-          // Create action
+          // Save action - write content to disk
+          if (action === "save") {
+            if (!args.content || args.content.trim() === "") {
+              return `Error: No content provided. Use content parameter to specify the plan content to save.`
+            }
+
+            const existingContent = await readPlanFile(directory, planFile)
+            if (existingContent) {
+              return `Plan file already exists at ${planFile}. Delete it first to create a new one, or use a different filename.`
+            }
+
+            await writePlanFile(directory, planFile, args.content)
+
+            return `Saved plan to ${planFile}
+
+You can now use:
+- rw-tasks: List all tasks
+- rw-start: Start the Ralph loop with this plan
+- rw-task <num>: Execute a single task`
+          }
+
+          // Create action - return target path for assistant to generate plan content
           const existingContent = await readPlanFile(directory, planFile)
           if (existingContent) {
             return `Plan file already exists at ${planFile}. Use rw-plan with action='view' to see it, or delete it first to create a new one.`
           }
 
-          let template = PLAN_TEMPLATE
-          if (args.description) {
-            // Customize template with user's description
-            template = template.replace(
-              "Describe your project goals and context here.",
-              args.description,
-            )
-          }
+          return `Ready to create plan.
 
-          await writePlanFile(directory, planFile, template)
+Target file: ${planFile}
 
-          return `📝 Created ${planFile}
-
-The plan file has been created with a template. Edit it to:
-1. Add your project title and overview
-2. Define your tasks with checkboxes
-3. Optionally set a completion_promise
-
-Plans are stored in ${DEFAULT_PLAN_DIR}/ - you can have multiple named plans.
-
-Then use:
-- rw-tasks: List all tasks
-- rw-start: Start the Ralph loop with this plan
-- rw-task <num>: Execute a single task`
+Generate a plan for the user based on their request, then show it to them.
+When they approve (or after any revisions), save it with:
+  rw-plan action='save' file='${planFile}' content=<plan content>`
         },
       }),
 
