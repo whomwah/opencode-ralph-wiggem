@@ -64,8 +64,8 @@ OpenCode will automatically install it on startup.
 
 ```bash
 # Clone the repository
-git clone https://github.com/whomwah/ralph-wiggum-opencode.git
-cd ralph-wiggum-opencode
+git clone https://github.com/whomwah/opencode-ralph-wiggum.git
+cd opencode-ralph-wiggum
 
 # Install dependencies
 just install
@@ -110,8 +110,8 @@ ln -sf $(pwd)/src/index.ts ~/.config/opencode/plugin/ralph-wiggum.ts
 
 ```bash
 # Clone the repository
-git clone https://github.com/whomwah/ralph-wiggum-opencode.git
-cd ralph-wiggum-opencode
+git clone https://github.com/whomwah/opencode-ralph-wiggum.git
+cd opencode-ralph-wiggum
 
 # Install dependencies
 just install
@@ -126,7 +126,7 @@ just build
 ### Project Structure
 
 ```
-ralph-wiggum-opencode/
+raopencode-lph-wiggum-
 ├── src/
 │   └── index.ts          # Main plugin source
 ├── templates/            # Plan templates for different scenarios
@@ -167,8 +167,8 @@ Alternatively, you can use `bun run <script>` with the npm scripts in `package.j
 1. Clone and install dependencies:
 
    ```bash
-   git clone https://github.com/whomwah/ralph-wiggum-opencode.git
-   cd ralph-wiggum-opencode
+   git clone https://github.com/whomwah/opencode-ralph-wiggum.git
+   cd opencode-ralph-wiggum
    just install
    ```
 
