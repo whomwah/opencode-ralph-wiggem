@@ -3,7 +3,8 @@ import * as path from "node:path"
 import { mkdir, unlink } from "node:fs/promises"
 
 const RALPH_STATE_FILE = ".opencode/ralph-loop.local.json"
-const DEFAULT_PLAN_FILE = "PLAN.md"
+const DEFAULT_PLAN_DIR = ".opencode/plans"
+const DEFAULT_PLAN_FILE = `${DEFAULT_PLAN_DIR}/PLAN.md`
 
 interface RalphState {
   active: boolean
@@ -92,6 +93,8 @@ async function readPlanFile(directory: string, planFile: string): Promise<string
 
 async function writePlanFile(directory: string, planFile: string, content: string): Promise<void> {
   const planPath = path.isAbsolute(planFile) ? planFile : path.join(directory, planFile)
+  const dir = path.dirname(planPath)
+  await mkdir(dir, { recursive: true })
   await Bun.write(planPath, content)
 }
 
@@ -266,50 +269,6 @@ function parsePlanFile(content: string): ParsedPlan {
     completionPromise,
     rawContent: content,
   }
-}
-
-function generatePlanPrompt(plan: ParsedPlan, taskFilter?: string): string {
-  let prompt = `# ${plan.title}\n\n`
-
-  if (plan.overview) {
-    prompt += `## Overview\n${plan.overview}\n\n`
-  }
-
-  prompt += `## Tasks\n\n`
-
-  const tasksToInclude = taskFilter
-    ? plan.tasks.filter(
-        (t) =>
-          t.id === taskFilter ||
-          t.title.toLowerCase().includes(taskFilter.toLowerCase()) ||
-          taskFilter === String(plan.tasks.indexOf(t) + 1),
-      )
-    : plan.tasks
-
-  for (const task of tasksToInclude) {
-    const checkbox = task.status === "completed" ? "[x]" : "[ ]"
-    prompt += `- ${checkbox} **${task.title}**\n`
-    if (task.description) {
-      prompt += `  ${task.description.split("\n").join("\n  ")}\n`
-    }
-  }
-
-  // Add instructions for marking tasks complete
-  prompt += `
-## Instructions
-
-**IMPORTANT**: After completing each task, immediately use the \`rw-complete\` tool to mark it done in the PLAN.md file. Do NOT batch completions - mark each task complete right after finishing it.
-
-Example: After finishing task 1, run: \`rw-complete 1\`
-
-This ensures progress is tracked accurately and the plan file stays in sync with actual work done.
-`
-
-  if (plan.completionPromise) {
-    prompt += `\n## Completion\n\nWhen ALL tasks are complete, output: <promise>${plan.completionPromise}</promise>\n`
-  }
-
-  return prompt
 }
 
 function generateSingleTaskPrompt(
@@ -965,6 +924,8 @@ Usage:
 The plan file uses a simple markdown format with checkboxes for tasks.
 You can set a completion_promise in the file that Ralph will use.
 
+Plans are stored in .opencode/plans/ by default, allowing multiple named plans.
+
 Example: rw-plan with description "Build a REST API with auth and tests"`,
         args: {
           action: tool.schema
@@ -1035,10 +996,12 @@ The plan file has been created with a template. Edit it to:
 2. Define your tasks with checkboxes
 3. Optionally set a completion_promise
 
+Plans are stored in ${DEFAULT_PLAN_DIR}/ - you can have multiple named plans.
+
 Then use:
 - rw-tasks: List all tasks
 - rw-start: Start the Ralph loop with this plan
-- rw-task <id>: Execute a single task`
+- rw-task <num>: Execute a single task`
         },
       }),
 
