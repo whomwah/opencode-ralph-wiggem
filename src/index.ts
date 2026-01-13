@@ -849,15 +849,14 @@ Max iterations: ${maxIterations > 0 ? maxIterations : "unlimited"}
 Completion promise: ${
             completionPromise
               ? `${completionPromise} (ONLY output when TRUE - do not lie!)`
-              : "none (runs forever)"
+              : "none (loop will stop at max iterations)"
           }
 
 The loop is now active. When the session becomes idle, the SAME PROMPT will be
 fed back to you. You'll see your previous work in files, creating a
 self-referential loop where you iteratively improve on the same task.
 
-⚠️  WARNING: This loop cannot be stopped manually! It will run infinitely
-unless you set maxIterations or completionPromise.
+To stop the loop early, use rw-cancel.
 
 ---
 
