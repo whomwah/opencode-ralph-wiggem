@@ -78,6 +78,17 @@ function extractPromiseText(text: string): string | null {
   return null
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "") // Remove special characters
+    .replace(/\s+/g, "-") // Replace spaces with hyphens
+    .replace(/-+/g, "-") // Collapse multiple hyphens
+    .replace(/^-+|-+$/g, "") // Trim hyphens from start/end
+    .slice(0, 50) // Limit length
+}
+
 async function readPlanFile(directory: string, planFile: string): Promise<string | null> {
   const planPath = path.isAbsolute(planFile) ? planFile : path.join(directory, planFile)
   try {
@@ -917,32 +928,53 @@ Loop continues at iteration ${state.iteration}.`
         description: `Create or view a PLAN.md file for structured task management.
 
 Usage:
-- Without arguments: Creates a new PLAN.md from template
+- Without arguments: Creates a new plan.md from template
 - With 'view': Shows the current plan and its tasks
-- With description: Creates a customized plan based on your description
+- With name/description: Creates a plan with auto-generated filename
 
 The plan file uses a simple markdown format with checkboxes for tasks.
 You can set a completion_promise in the file that Ralph will use.
 
+Filename generation (in priority order):
+1. Explicit 'file' parameter if provided
+2. Slugified 'name' parameter (e.g., "My API" → my-api.md)
+3. Slugified 'description' parameter
+4. Falls back to "plan.md"
+
 Plans are stored in .opencode/plans/ by default, allowing multiple named plans.
 
-Example: rw-plan with description "Build a REST API with auth and tests"`,
+Example: rw-plan with name "REST API" creates .opencode/plans/rest-api.md`,
         args: {
           action: tool.schema
             .string()
             .optional()
             .describe("Action: 'create', 'view', or leave empty for create"),
+          name: tool.schema
+            .string()
+            .optional()
+            .describe("Plan name - used to generate filename (e.g., 'My API' → my-api.md)"),
           description: tool.schema
             .string()
             .optional()
-            .describe("Project description to customize the plan template"),
+            .describe(
+              "Project description to customize the plan template (also used for filename if no name)",
+            ),
           file: tool.schema
             .string()
             .optional()
-            .describe(`Plan file path (default: ${DEFAULT_PLAN_FILE})`),
+            .describe(`Explicit plan file path (overrides auto-generated name)`),
         },
         async execute(args) {
-          const planFile = args.file || DEFAULT_PLAN_FILE
+          // Generate filename: file > name > description > "plan.md"
+          let planFile: string
+          if (args.file) {
+            planFile = args.file
+          } else {
+            const baseName = args.name || args.description
+            const slug = baseName ? slugify(baseName) : "plan"
+            planFile = `${DEFAULT_PLAN_DIR}/${slug || "plan"}.md`
+          }
+
           const action = args.action || "create"
 
           if (action === "view") {
