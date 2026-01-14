@@ -443,6 +443,36 @@ Project context and goals (helps AI make better decisions).
 
 **Note**: The `completion_promise` comment is optional and used with the legacy `rw-loop` tool. For plan-based workflows (`rw-start`, `rw-task`), completion is determined by task checkboxes.
 
+## Local Files and Folders
+
+Ralph creates files in your project's `.opencode/` directory:
+
+```
+.opencode/
+├── plans/                      # Your plan files (persistent)
+│   ├── my-api.md
+│   └── another-project.md
+└── ralph-loop.local.json       # Loop state (temporary)
+```
+
+### File Details
+
+| File/Folder                       | Purpose                                                              | Lifecycle                                                                             |
+| --------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `.opencode/plans/`                | Stores PLAN.md files with your tasks                                 | Persistent - you create and manage these                                              |
+| `.opencode/ralph-loop.local.json` | Tracks active loop state (iteration count, current task, session ID) | **Temporary** - created when loop starts, deleted when loop completes or is cancelled |
+
+### Git Recommendations
+
+Add to your `.gitignore`:
+
+```gitignore
+# Ralph Wiggum plugin state (temporary, local only)
+.opencode/ralph-loop.local.json
+```
+
+Your plan files in `.opencode/plans/` can be committed if you want to share them with your team, or gitignored if they're personal.
+
 ## Prompt Writing Best Practices
 
 These tips are especially useful for the direct `rw-loop` mode where you're iterating on a single goal.
