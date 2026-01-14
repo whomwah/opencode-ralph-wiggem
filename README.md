@@ -84,7 +84,7 @@ Nelson's `nm-plan` and `nm-start` tools align with this workflow:
 
 ### Plan Mode
 
-Use OpenCode's Plan mode (Ctrl+K) with `nm-plan` to create and refine your plan _before_ any code is written. This is an iterative conversation where you shape the plan until you're happy with it.
+Use OpenCode's Plan mode with `nm-plan` to create and refine your plan _before_ any code is written. This is an iterative conversation where you shape the plan until you're happy with it.
 
 1. **Start planning** - Ask the AI to create a plan:
 
