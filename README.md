@@ -75,282 +75,68 @@ just link-local    # Global: ~/.config/opencode/plugin/
 just link-project  # Project: .opencode/plugin/
 ```
 
-#### How Local Plugin Loading Works
-
-OpenCode automatically loads plugins from two directories at startup:
-
-1. **Global plugins**: `~/.config/opencode/plugin/` - Available in all projects
-2. **Project plugins**: `.opencode/plugin/` - Only available in that project
-
-The `link-local` and `link-project` tasks create **symbolic links** from these directories to the source TypeScript file (`src/index.ts`). This means:
-
-- OpenCode finds the symlink in its plugin directory
-- The symlink points to your local source file
-- OpenCode loads and executes the TypeScript directly (Bun handles TS natively)
-- Changes to `src/index.ts` take effect after restarting OpenCode
-
-```bash
-# What link-local actually does:
-ln -sf $(pwd)/src/index.ts ~/.config/opencode/plugin/ralph-wiggum.ts
-
-# Result: OpenCode sees ralph-wiggum.ts in its plugin folder
-# but it's really reading from your development directory
-```
-
-**Important**: Plugins are loaded once at OpenCode startup. After making changes, you must restart OpenCode to see them.
-
-## Development
-
-### Prerequisites
-
-- [Bun](https://bun.sh) v1.0 or later
-- [OpenCode](https://opencode.ai) installed
-
-### Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/whomwah/opencode-ralph-wiggum.git
-cd opencode-ralph-wiggum
-
-# Install dependencies
-just install
-
-# Type check
-just typecheck
-
-# Build for distribution
-just build
-```
-
-### Project Structure
-
-```
-opencode-ralph-wiggum/
-├── src/
-│   └── index.ts          # Main plugin source
-├── dist/                 # Built output (generated)
-├── package.json
-├── tsconfig.json
-└── README.md
-```
-
-### Tasks
-
-This project uses [just](https://github.com/casey/just) as a command runner. Run `just` to see all available tasks:
-
-| Task                  | Description                            |
-| --------------------- | -------------------------------------- |
-| `just install`        | Install dependencies                   |
-| `just build`          | Build the plugin for distribution      |
-| `just build-types`    | Generate TypeScript declarations       |
-| `just build-all`      | Build everything (code + types)        |
-| `just dev`            | Watch mode for development             |
-| `just typecheck`      | Run TypeScript type checking           |
-| `just link-local`     | Symlink to global OpenCode plugins     |
-| `just link-project`   | Symlink to current project's plugins   |
-| `just unlink-local`   | Remove global plugin symlink           |
-| `just unlink-project` | Remove project plugin symlink          |
-| `just clean`          | Clean build artifacts                  |
-| `just rebuild`        | Full rebuild from clean state          |
-| `just prepublish`     | Prepare for publishing (build + types) |
-
-Alternatively, you can use `bun run <script>` with the npm scripts in `package.json`.
-
-### Local Development Workflow
-
-1. Clone and install dependencies:
-
-   ```bash
-   git clone https://github.com/whomwah/opencode-ralph-wiggum.git
-   cd opencode-ralph-wiggum
-   just install
-   ```
-
-2. Link the plugin to OpenCode:
-
-   ```bash
-   just link-local
-   ```
-
-   This creates a symlink at `~/.config/opencode/plugin/ralph-wiggum.ts` pointing to `src/index.ts`.
-
-3. (Re)start OpenCode - it will discover and load the plugin from the symlink
-
-4. Make changes to `src/index.ts`
-
-5. Restart OpenCode to pick up changes (plugins are loaded once at startup)
-
-6. Run `just typecheck` to verify types before committing
-
-### Publishing to npm
-
-```bash
-# Ensure you're logged in to npm
-npm login
-
-# Build and publish
-just prepublish
-npm publish
-```
-
-Once published, users can install via their `opencode.json`:
-
-```json
-{
-  "plugin": ["opencode-ralph-wiggum"]
-}
-```
-
 ## Usage
 
-There are two ways to use Ralph: **direct prompts** for simple tasks, or **plan-based workflow** for structured projects.
+Ralph's tools are designed to complement OpenCode's built-in Plan and Code modes:
 
-### Quick Start
+- **OpenCode Plan mode** (Ctrl+K) - For thinking, designing, and conversation without making changes
+- **OpenCode Build mode** - For executing tasks and writing code
 
-1. **Create a plan** - Describe what you want to build:
+Ralph's `rw-plan` and `rw-start` tools align with this workflow:
+
+| OpenCode Mode | Ralph Tool | What Happens                                |
+| ------------- | ---------- | ------------------------------------------- |
+| Plan mode     | `rw-plan`  | Design and refine your plan in conversation |
+| Build mode    | `rw-start` | Execute tasks, write code, commit changes   |
+
+### Plan Mode
+
+Use OpenCode's Plan mode (Ctrl+K) with `rw-plan` to create and refine your plan _before_ any code is written. This is an iterative conversation where you shape the plan until you're happy with it.
+
+1. **Start planning** - Ask the AI to create a plan:
 
    ```
-   You: "Use rw-plan with name 'my-api' and description 'Build a REST API for todos'"
+   You: "Create a plan for building a REST API for todos"
    ```
 
-   This creates `.opencode/plans/my-api.md` with a template.
+   The AI calls `rw-plan` and generates a draft plan, showing it to you in the conversation. **No file is written yet.**
 
-2. **Edit the plan** - Add your tasks with checkbox format:
+2. **Iterate on the plan** - Refine it through conversation:
 
-   ```markdown
-   - [ ] **Setup project** - Initialize with TypeScript and tests
-   - [ ] **Add endpoints** - CRUD operations for todos
-   - [ ] **Add auth** - JWT-based authentication
+   ```
+   You: "Add a task for authentication"
+   You: "Split the database task into schema design and migrations"
+   You: "Remove the Docker task, I'll handle that manually"
    ```
 
-3. **Start the loop** - Ralph works through each task:
+   The AI updates the plan and shows you each revision.
+
+3. **Confirm and save** - When you're satisfied, confirm it:
+
    ```
-   You: "rw-start"
+   You: "Looks good, save it"
    ```
 
-That's it! Ralph iterates through tasks, marking each complete and committing changes.
+   The AI calls `rw-plan` with `action='save'` to write the plan file to `.opencode/plans/rest-api.md`.
 
-### Creating a Plan
+### Build Mode
 
-Use OpenCode's plan mode to create your PLAN.md:
+Once your plan is saved, switch to OpenCode's Build mode and use `rw-start` to execute tasks. The AI reads the plan file and works through each task.
 
-```
-# Switch to plan mode (Ctrl+K in OpenCode)
-You: "I want to build a CLI tool that converts markdown to HTML"
-AI: [Helps you think through the design]
+1. **Start the loop** - Execute all pending tasks automatically:
 
-You: "Create a PLAN.md with these tasks"
-AI: [Creates structured plan file]
-```
+   ```
+   You: "Use rw-start rest-api"
+   ```
 
-Or use the `rw-plan` tool:
+   Ralph works through each task, marking them complete and creating git commits.
 
-```
-You: "Use rw-plan to create a plan for building a REST API"
-```
+2. **Or run tasks one at a time** - For more control:
 
-The `rw-plan` workflow:
-
-1. Call with `action='create'` and a name/description to get the target file path
-2. Generate an appropriate plan and show it to the user
-3. User may request changes - refine the plan in conversation
-4. When approved, call with `action='save'` and `content=<the plan>` to write to disk
-
-### Example PLAN.md
-
-```markdown
-# Markdown CLI Tool
-
-## Overview
-
-Build a CLI tool that converts markdown files to styled HTML.
-Target: Node.js, TypeScript, published to npm.
-
-## Tasks
-
-- [ ] **Project Setup**
-      Initialize TypeScript project with proper configuration.
-      Add eslint, prettier, and vitest.
-
-- [ ] **Core Parser**
-      Implement markdown parsing using marked library.
-      Support GFM extensions.
-
-- [ ] **CLI Interface**
-      Add commander.js for argument parsing.
-      Support: input file, output file, --watch mode.
-
-- [ ] **Styling**
-      Add default CSS styles for HTML output.
-      Support custom style injection via --style flag.
-
-- [ ] **Tests**
-      Write unit tests for parser and CLI.
-      Aim for >80% coverage.
-
-- [ ] **Documentation**
-      Write README with usage examples.
-      Add --help output.
-```
-
-### Starting a Ralph Loop
-
-**From a plan (simplest):**
-
-```
-You: "Start ralph loop"
-# or
-You: "Use rw-start"
-```
-
-Ralph reads PLAN.md, works through each task, and stops when all tasks are marked complete.
-
-**Direct prompt (for simple tasks):**
-
-```
-You: "Use rw-loop with prompt 'Build a REST API for todos' and completionPromise 'DONE'"
-```
-
-### Single Task Execution
-
-For more control, execute tasks one at a time:
-
-```
-# List available tasks
-You: "Use rw-tasks"
-
-# Execute task #2
-You: "Use rw-task 2"
-
-# Task is automatically marked complete when finished
-```
-
-This is useful when you want to:
-
-- Review work between tasks
-- Make manual adjustments before committing
-- Skip certain tasks
-- Debug a specific task
-
-**Key difference from loop mode**: Single task execution does NOT create git commits automatically. You review the changes and commit manually when satisfied.
-
-### Modes Comparison
-
-| Behavior            | `rw-start` (plan loop)          | `rw-task` (single task) | `rw-loop` (direct loop)   |
-| ------------------- | ------------------------------- | ----------------------- | ------------------------- |
-| Input               | PLAN.md file                    | PLAN.md file            | Direct prompt             |
-| Auto-complete task  | Yes                             | Yes                     | N/A (no tasks)            |
-| Git commit per task | Yes                             | No                      | No                        |
-| Continues to next   | Yes                             | No                      | Same prompt each time     |
-| Stops when          | All tasks complete              | Task complete           | Completion promise found  |
-| Best for            | Walk away, review commits later | Step through carefully  | Iterative problem-solving |
-
-**`rw-start`**: Best for structured projects. Creates git commits so you can review each task's changes.
-
-**`rw-task`**: Best for careful, controlled execution. No commits - you review and commit manually.
-
-**`rw-loop`**: Best for hammering at one goal ("make tests pass", "fix the build") until it works.
+   ```
+   You: "Use rw-tasks"          # List tasks and their status
+   You: "Use rw-task 2"         # Execute task #2 only
+   ```
 
 ### Available Tools
 
@@ -411,37 +197,33 @@ Direct loop mode - keeps feeding the same prompt until completion or max iterati
 | `maxIterations`     | number | No       | Maximum iterations before stopping (default: 2, 0 = unlimited)  |
 | `completionPromise` | string | No       | Phrase that signals completion when wrapped in `<promise>` tags |
 
-## Plan File Format
+## Development
 
-The PLAN.md file uses simple markdown:
+### Prerequisites
 
-```markdown
-# Project Title
+- [Bun](https://bun.sh) v1.0 or later
+- [OpenCode](https://opencode.ai) installed
 
-## Overview
+### Setup
 
-Project context and goals (helps AI make better decisions).
+```bash
+# Clone the repository
+git clone https://github.com/whomwah/opencode-ralph-wiggum.git
+cd opencode-ralph-wiggum
 
-## Tasks
+# Install dependencies
+just install
 
-- [ ] **Task Title**
-      Description and details indented below.
+# Type check
+just typecheck
 
-- [ ] **Another Task**
-      More details here.
-
-- [x] **Completed Task**
-      Already done tasks use [x].
+# Build for distribution
+just build
 ```
 
-### Key Elements
+### Tasks
 
-1. **Title**: First `# Heading` becomes the plan title
-2. **Overview**: Context section helps AI understand the project
-3. **Tasks**: Use `- [ ]` checkbox format, bold titles recommended
-4. **Task Descriptions**: Indent with 2+ spaces under the task line
-
-**Note**: The `completion_promise` comment is optional and used with the legacy `rw-loop` tool. For plan-based workflows (`rw-start`, `rw-task`), completion is determined by task checkboxes.
+This project uses [just](https://github.com/casey/just) as a command runner. Run `just` with no arguments to see all available tasks.
 
 ## Local Files and Folders
 
@@ -473,76 +255,6 @@ Add to your `.gitignore`:
 
 Your plan files in `.opencode/plans/` can be committed if you want to share them with your team, or gitignored if they're personal.
 
-## Prompt Writing Best Practices
-
-These tips are especially useful for the direct `rw-loop` mode where you're iterating on a single goal.
-
-### 1. Clear Completion Criteria
-
-**Bad:**
-
-```
-Build a todo API and make it good.
-```
-
-**Good:**
-
-```
-Build a REST API for todos.
-
-When complete:
-- All CRUD endpoints working
-- Input validation in place
-- Tests passing (coverage > 80%)
-- README with API docs
-```
-
-### 2. Incremental Goals
-
-**Bad:**
-
-```
-Create a complete e-commerce platform.
-```
-
-**Good:**
-
-```
-Phase 1: User authentication (JWT, tests)
-Phase 2: Product catalog (list/search, tests)
-Phase 3: Shopping cart (add/remove, tests)
-```
-
-### 3. Self-Correction
-
-**Bad:**
-
-```
-Write code for feature X.
-```
-
-**Good:**
-
-```
-Implement feature X following TDD:
-1. Write failing tests
-2. Implement feature
-3. Run tests
-4. If any fail, debug and fix
-5. Refactor if needed
-6. Repeat until all green
-```
-
-### 4. Safety Limits
-
-Always use `maxIterations` as a safety net to prevent runaway loops:
-
-```
-rw-loop with maxIterations: 20
-```
-
-When maxIterations is reached, the loop **stops completely** - it does not continue to the next task. This is intentional: if a task isn't completing within the expected iterations, human review is needed.
-
 ## How It Works
 
 ### Plan-Based Mode (rw-start, rw-task)
@@ -571,26 +283,6 @@ When maxIterations is reached, the loop **stops completely** - it does not conti
 
 5. **Stops When**: The completion promise is detected OR maxIterations is reached
 
-## Philosophy
-
-Ralph embodies several key principles:
-
-### 1. Iteration > Perfection
-
-Don't aim for perfect on first try. Let the loop refine the work.
-
-### 2. Failures Are Data
-
-"Deterministically bad" means failures are predictable and informative. Use them to tune prompts.
-
-### 3. Operator Skill Matters
-
-Success depends on writing good prompts, not just having a good model.
-
-### 4. Persistence Wins
-
-Keep trying until success. The loop handles retry logic automatically.
-
 ## When to Use Ralph
 
 ### Plan-based mode (`rw-start`) is good for:
@@ -608,7 +300,6 @@ Keep trying until success. The loop handles retry logic automatically.
 
 ### Not good for:
 
-- Tasks requiring human judgment or design decisions
 - One-shot operations that don't benefit from iteration
 - Tasks with unclear success criteria
 - Production debugging (use targeted debugging instead)
@@ -627,14 +318,11 @@ This OpenCode port has some differences from the original Claude Code plugin:
 ## Learn More
 
 - Original technique: https://ghuntley.com/ralph/
-- Ralph Orchestrator: https://github.com/mikeyobrien/ralph-orchestrator
 - OpenCode Plugins: https://opencode.ai/docs/plugins/
 
 ## Credits
 
-- Original Ralph Wiggum technique by [Geoffrey Huntley](https://ghuntley.com)
 - Claude Code plugin by Daisy Hollman (Anthropic)
-- OpenCode port by the community
 
 ## License
 
