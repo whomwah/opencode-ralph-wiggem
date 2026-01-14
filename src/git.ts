@@ -46,20 +46,28 @@ export async function createGitCommit(
 
   // Create commit with task info
   // Git commit format: subject line (short), blank line, body (details)
-  // If taskTitle has **heading** format, extract heading as subject, rest as body
-  const headingMatch = taskTitle.match(/^\*\*(.+?)\*\*(.*)$/)
+  // Task titles may be in formats like:
+  //   "**Create file** - description"  (with ** markers)
+  //   "Create file** - description"    (trailing ** from parser)
+  //   "Create file - description"      (plain text)
+  // We want to extract the heading (before " - ") as subject, rest as body
   let commitSubject: string
   let commitBody: string | null = null
 
-  if (headingMatch) {
-    const heading = headingMatch[1].trim()
-    const description = headingMatch[2].trim()
+  // First, clean up any ** markers from the title
+  const cleanTitle = taskTitle.replace(/\*\*/g, "").trim()
+
+  // Split on " - " to separate heading from description
+  const separatorIdx = cleanTitle.indexOf(" - ")
+  if (separatorIdx !== -1) {
+    const heading = cleanTitle.slice(0, separatorIdx).trim()
+    const description = cleanTitle.slice(separatorIdx + 3).trim()
     commitSubject = `feat(ralph): task ${taskNum} - ${heading}`
     if (description) {
       commitBody = description
     }
   } else {
-    commitSubject = `feat(ralph): task ${taskNum} - ${taskTitle}`
+    commitSubject = `feat(ralph): task ${taskNum} - ${cleanTitle}`
   }
 
   const commitArgs = ["commit", "-m", commitSubject]
