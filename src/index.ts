@@ -176,13 +176,33 @@ async function createGitCommit(
   }
 
   // Create commit with task info
-  const commitMessage = `feat(ralph): complete task ${taskNum} - ${taskTitle}`
-  const commitResult = await runCommand("git", ["commit", "-m", commitMessage])
+  // Git commit format: subject line (short), blank line, body (details)
+  // If taskTitle has **heading** format, extract heading as subject, rest as body
+  const headingMatch = taskTitle.match(/^\*\*(.+?)\*\*(.*)$/)
+  let commitSubject: string
+  let commitBody: string | null = null
+
+  if (headingMatch) {
+    const heading = headingMatch[1].trim()
+    const description = headingMatch[2].trim()
+    commitSubject = `feat(ralph): task ${taskNum} - ${heading}`
+    if (description) {
+      commitBody = description
+    }
+  } else {
+    commitSubject = `feat(ralph): task ${taskNum} - ${taskTitle}`
+  }
+
+  const commitArgs = ["commit", "-m", commitSubject]
+  if (commitBody) {
+    commitArgs.push("-m", commitBody)
+  }
+  const commitResult = await runCommand("git", commitArgs)
   if (commitResult.code !== 0) {
     return { success: false, message: `Failed to commit: ${commitResult.stderr}` }
   }
 
-  return { success: true, message: `Created commit: ${commitMessage}` }
+  return { success: true, message: `Created commit: ${commitSubject}` }
 }
 
 async function markTaskCompleteAndCommit(
