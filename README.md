@@ -126,14 +126,9 @@ just build
 ### Project Structure
 
 ```
-raopencode-lph-wiggum-
+opencode-ralph-wiggum/
 ├── src/
 │   └── index.ts          # Main plugin source
-├── templates/            # Plan templates for different scenarios
-│   ├── README.md         # Template index and usage guide
-│   ├── minimal.md        # Bare-bones template
-│   ├── bug-hunt.md       # Iterative debugging template
-│   └── rest-api.md       # REST API project template
 ├── dist/                 # Built output (generated)
 ├── package.json
 ├── tsconfig.json
@@ -211,22 +206,30 @@ Once published, users can install via their `opencode.json`:
 
 There are two ways to use Ralph: **direct prompts** for simple tasks, or **plan-based workflow** for structured projects.
 
-### Quick Start: Plan-Based Workflow (Recommended)
+### Quick Start
 
-The easiest way to use Ralph is with a PLAN.md file:
+1. **Create a plan** - Describe what you want to build:
 
-```
-# Step 1: Create a plan (in plan mode for best results)
-You: "Help me create a plan to build a REST API with auth"
-AI: [Creates PLAN.md with structured tasks]
+   ```
+   You: "Use rw-plan with name 'my-api' and description 'Build a REST API for todos'"
+   ```
 
-# Step 2: Start the loop
-You: "Start ralph loop"
-AI: [Uses rw-start, begins iterating through tasks]
+   This creates `.opencode/plans/my-api.md` with a template.
 
-# Step 3: Walk away
-Ralph iterates until all tasks are complete
-```
+2. **Edit the plan** - Add your tasks with checkbox format:
+
+   ```markdown
+   - [ ] **Setup project** - Initialize with TypeScript and tests
+   - [ ] **Add endpoints** - CRUD operations for todos
+   - [ ] **Add auth** - JWT-based authentication
+   ```
+
+3. **Start the loop** - Ralph works through each task:
+   ```
+   You: "rw-start"
+   ```
+
+That's it! Ralph iterates through tasks, marking each complete and committing changes.
 
 ### Creating a Plan
 
@@ -246,6 +249,13 @@ Or use the `rw-plan` tool:
 ```
 You: "Use rw-plan to create a plan for building a REST API"
 ```
+
+The `rw-plan` workflow:
+
+1. Call with `action='create'` and a name/description to get the target file path
+2. Generate an appropriate plan and show it to the user
+3. User may request changes - refine the plan in conversation
+4. When approved, call with `action='save'` and `content=<the plan>` to write to disk
 
 ### Example PLAN.md
 
@@ -325,16 +335,22 @@ This is useful when you want to:
 
 **Key difference from loop mode**: Single task execution does NOT create git commits automatically. You review the changes and commit manually when satisfied.
 
-### Loop vs Single Task Mode
+### Modes Comparison
 
-| Behavior               | `rw-start` (loop)               | `rw-task` (single)     |
-| ---------------------- | ------------------------------- | ---------------------- |
-| Auto-complete task     | Yes                             | Yes                    |
-| Git commit per task    | Yes                             | No                     |
-| Continues to next task | Yes                             | No                     |
-| Use case               | Walk away, review commits later | Step through carefully |
+| Behavior            | `rw-start` (plan loop)          | `rw-task` (single task) | `rw-loop` (direct loop)   |
+| ------------------- | ------------------------------- | ----------------------- | ------------------------- |
+| Input               | PLAN.md file                    | PLAN.md file            | Direct prompt             |
+| Auto-complete task  | Yes                             | Yes                     | N/A (no tasks)            |
+| Git commit per task | Yes                             | No                      | No                        |
+| Continues to next   | Yes                             | No                      | Same prompt each time     |
+| Stops when          | All tasks complete              | Task complete           | Completion promise found  |
+| Best for            | Walk away, review commits later | Step through carefully  | Iterative problem-solving |
 
-When using `rw-start`, each completed task gets its own git commit (e.g., `feat(ralph): complete task 2 - Core Parser`). This lets you review each task's changes separately in git history.
+**`rw-start`**: Best for structured projects. Creates git commits so you can review each task's changes.
+
+**`rw-task`**: Best for careful, controlled execution. No commits - you review and commit manually.
+
+**`rw-loop`**: Best for hammering at one goal ("make tests pass", "fix the build") until it works.
 
 ### Available Tools
 
@@ -354,25 +370,36 @@ When using `rw-start`, each completed task gets its own git commit (e.g., `feat(
 
 #### rw-start
 
-| Parameter       | Type   | Required | Description                             |
-| --------------- | ------ | -------- | --------------------------------------- |
-| `file`          | string | No       | Plan file path (default: PLAN.md)       |
-| `maxIterations` | number | No       | Max iterations (default: 0 = unlimited) |
+| Parameter       | Type   | Required | Description                                       |
+| --------------- | ------ | -------- | ------------------------------------------------- |
+| `file`          | string | No       | Plan file path (default: .opencode/plans/PLAN.md) |
+| `maxIterations` | number | No       | Max iterations (default: 0 = unlimited)           |
 
 #### rw-plan
 
-| Parameter     | Type   | Required | Description                               |
-| ------------- | ------ | -------- | ----------------------------------------- |
-| `action`      | string | No       | 'create' or 'view' (default: create)      |
-| `description` | string | No       | Project description to customize template |
-| `file`        | string | No       | Plan file path (default: PLAN.md)         |
+| Parameter     | Type   | Required | Description                                                        |
+| ------------- | ------ | -------- | ------------------------------------------------------------------ |
+| `action`      | string | No       | 'create', 'view', or 'save' (default: create)                      |
+| `name`        | string | No       | Plan name - used to generate filename (e.g., 'My API' → my-api.md) |
+| `description` | string | No       | Project description (also used for filename if no name)            |
+| `file`        | string | No       | Explicit file path (overrides auto-generated name)                 |
+| `content`     | string | No       | Plan content to save (required when action='save')                 |
+
+Filename generation priority:
+
+1. Explicit `file` parameter if provided
+2. Slugified `name` parameter
+3. Slugified `description` parameter
+4. Falls back to "plan.md"
+
+All plans are stored in `.opencode/plans/` by default.
 
 #### rw-task
 
-| Parameter | Type   | Required | Description                       |
-| --------- | ------ | -------- | --------------------------------- |
-| `task`    | string | Yes      | Task number (1, 2, 3...) or name  |
-| `file`    | string | No       | Plan file path (default: PLAN.md) |
+| Parameter | Type   | Required | Description                                       |
+| --------- | ------ | -------- | ------------------------------------------------- |
+| `task`    | string | Yes      | Task number (1, 2, 3...) or name                  |
+| `file`    | string | No       | Plan file path (default: .opencode/plans/PLAN.md) |
 
 #### rw-loop
 
@@ -381,7 +408,7 @@ Direct loop mode - keeps feeding the same prompt until completion or max iterati
 | Parameter           | Type   | Required | Description                                                     |
 | ------------------- | ------ | -------- | --------------------------------------------------------------- |
 | `prompt`            | string | Yes      | The task prompt to execute repeatedly                           |
-| `maxIterations`     | number | No       | Maximum iterations before stopping (0 = unlimited)              |
+| `maxIterations`     | number | No       | Maximum iterations before stopping (default: 2, 0 = unlimited)  |
 | `completionPromise` | string | No       | Phrase that signals completion when wrapped in `<promise>` tags |
 
 ## Plan File Format
@@ -415,6 +442,36 @@ Project context and goals (helps AI make better decisions).
 4. **Task Descriptions**: Indent with 2+ spaces under the task line
 
 **Note**: The `completion_promise` comment is optional and used with the legacy `rw-loop` tool. For plan-based workflows (`rw-start`, `rw-task`), completion is determined by task checkboxes.
+
+## Local Files and Folders
+
+Ralph creates files in your project's `.opencode/` directory:
+
+```
+.opencode/
+├── plans/                      # Your plan files (persistent)
+│   ├── my-api.md
+│   └── another-project.md
+└── ralph-loop.local.json       # Loop state (temporary)
+```
+
+### File Details
+
+| File/Folder                       | Purpose                                                              | Lifecycle                                                                             |
+| --------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `.opencode/plans/`                | Stores PLAN.md files with your tasks                                 | Persistent - you create and manage these                                              |
+| `.opencode/ralph-loop.local.json` | Tracks active loop state (iteration count, current task, session ID) | **Temporary** - created when loop starts, deleted when loop completes or is cancelled |
+
+### Git Recommendations
+
+Add to your `.gitignore`:
+
+```gitignore
+# Ralph Wiggum plugin state (temporary, local only)
+.opencode/ralph-loop.local.json
+```
+
+Your plan files in `.opencode/plans/` can be committed if you want to share them with your team, or gitignored if they're personal.
 
 ## Prompt Writing Best Practices
 

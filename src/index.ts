@@ -3,7 +3,8 @@ import * as path from "node:path"
 import { mkdir, unlink } from "node:fs/promises"
 
 const RALPH_STATE_FILE = ".opencode/ralph-loop.local.json"
-const DEFAULT_PLAN_FILE = "PLAN.md"
+const DEFAULT_PLAN_DIR = ".opencode/plans"
+const DEFAULT_PLAN_FILE = `${DEFAULT_PLAN_DIR}/PLAN.md`
 
 interface RalphState {
   active: boolean
@@ -77,6 +78,42 @@ function extractPromiseText(text: string): string | null {
   return null
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "") // Remove special characters
+    .replace(/\s+/g, "-") // Replace spaces with hyphens
+    .replace(/-+/g, "-") // Collapse multiple hyphens
+    .replace(/^-+|-+$/g, "") // Trim hyphens from start/end
+    .slice(0, 50) // Limit length
+}
+
+interface ProjectTools {
+  hasJustfile: boolean
+  hasPackageJson: boolean
+  hasMakefile: boolean
+}
+
+async function detectProjectTools(directory: string): Promise<ProjectTools> {
+  const checkFile = async (filename: string): Promise<boolean> => {
+    try {
+      const file = Bun.file(path.join(directory, filename))
+      return await file.exists()
+    } catch {
+      return false
+    }
+  }
+
+  const [hasJustfile, hasPackageJson, hasMakefile] = await Promise.all([
+    checkFile("justfile"),
+    checkFile("package.json"),
+    checkFile("Makefile"),
+  ])
+
+  return { hasJustfile, hasPackageJson, hasMakefile }
+}
+
 async function readPlanFile(directory: string, planFile: string): Promise<string | null> {
   const planPath = path.isAbsolute(planFile) ? planFile : path.join(directory, planFile)
   try {
@@ -92,6 +129,8 @@ async function readPlanFile(directory: string, planFile: string): Promise<string
 
 async function writePlanFile(directory: string, planFile: string, content: string): Promise<void> {
   const planPath = path.isAbsolute(planFile) ? planFile : path.join(directory, planFile)
+  const dir = path.dirname(planPath)
+  await mkdir(dir, { recursive: true })
   await Bun.write(planPath, content)
 }
 
@@ -163,14 +202,15 @@ async function markTaskCompleteAndCommit(
   }
 
   const task = plan.tasks[taskNum - 1]
-  if (task.status === "completed") {
-    return { taskTitle: task.title }
+  const alreadyCompleted = task.status === "completed"
+
+  // Update the plan file if not already complete
+  if (!alreadyCompleted) {
+    const updatedContent = updateTaskStatus(content, task.id, plan.tasks, "completed")
+    await writePlanFile(directory, planFile, updatedContent)
   }
 
-  // Update the plan file
-  const updatedContent = updateTaskStatus(content, task.id, plan.tasks, "completed")
-  await writePlanFile(directory, planFile, updatedContent)
-
+  // Create commit if requested (even if task was already marked complete)
   let commitResult: { success: boolean; message: string } | undefined
   if (shouldCommit) {
     commitResult = await createGitCommit(directory, task.title, taskNum)
@@ -268,60 +308,40 @@ function parsePlanFile(content: string): ParsedPlan {
   }
 }
 
-function generatePlanPrompt(plan: ParsedPlan, taskFilter?: string): string {
-  let prompt = `# ${plan.title}\n\n`
-
-  if (plan.overview) {
-    prompt += `## Overview\n${plan.overview}\n\n`
-  }
-
-  prompt += `## Tasks\n\n`
-
-  const tasksToInclude = taskFilter
-    ? plan.tasks.filter(
-        (t) =>
-          t.id === taskFilter ||
-          t.title.toLowerCase().includes(taskFilter.toLowerCase()) ||
-          taskFilter === String(plan.tasks.indexOf(t) + 1),
-      )
-    : plan.tasks
-
-  for (const task of tasksToInclude) {
-    const checkbox = task.status === "completed" ? "[x]" : "[ ]"
-    prompt += `- ${checkbox} **${task.title}**\n`
-    if (task.description) {
-      prompt += `  ${task.description.split("\n").join("\n  ")}\n`
-    }
-  }
-
-  // Add instructions for marking tasks complete
-  prompt += `
-## Instructions
-
-**IMPORTANT**: After completing each task, immediately use the \`rw-complete\` tool to mark it done in the PLAN.md file. Do NOT batch completions - mark each task complete right after finishing it.
-
-Example: After finishing task 1, run: \`rw-complete 1\`
-
-This ensures progress is tracked accurately and the plan file stays in sync with actual work done.
-`
-
-  if (plan.completionPromise) {
-    prompt += `\n## Completion\n\nWhen ALL tasks are complete, output: <promise>${plan.completionPromise}</promise>\n`
-  }
-
-  return prompt
-}
-
 function generateSingleTaskPrompt(
   plan: ParsedPlan,
   task: PlanTask,
   taskNum: number,
   isLoopMode: boolean,
+  projectTools?: ProjectTools,
 ): string {
   let prompt = `# ${plan.title || "Project Plan"}\n\n`
 
   if (plan.overview) {
     prompt += `## Project Context\n${plan.overview}\n\n`
+  }
+
+  // Show available project tools with usage instructions
+  if (projectTools) {
+    const tools: string[] = []
+    if (projectTools.hasJustfile) tools.push("`just` (justfile)")
+    if (projectTools.hasPackageJson) tools.push("`npm`/`bun` (package.json)")
+    if (projectTools.hasMakefile) tools.push("`make` (Makefile)")
+
+    if (tools.length > 0) {
+      prompt += `## Available Tools\nThis project has: ${tools.join(", ")}\n\n`
+      prompt += `**IMPORTANT**: Use these project tools for build, test, and other operations:\n`
+      if (projectTools.hasJustfile) {
+        prompt += `- Run \`just\` to see all available tasks, then use \`just <task>\` for build/test/format\n`
+      }
+      if (projectTools.hasPackageJson) {
+        prompt += `- Use \`npm run <script>\` or \`bun run <script>\` for package.json scripts\n`
+      }
+      if (projectTools.hasMakefile) {
+        prompt += `- Use \`make <target>\` for Makefile targets\n`
+      }
+      prompt += `\n`
+    }
   }
 
   // Show progress overview
@@ -646,7 +666,8 @@ const RalphWiggumPlugin: Plugin = async (ctx) => {
         state.currentTaskNum = nextTaskNum
         await writeState(directory, state)
 
-        const taskPrompt = generateSingleTaskPrompt(plan, nextTask, nextTaskNum, true)
+        const projectTools = await detectProjectTools(directory)
+        const taskPrompt = generateSingleTaskPrompt(plan, nextTask, nextTaskNum, true, projectTools)
         const completedCount = plan.tasks.filter((t) => t.status === "completed").length
 
         const systemMsg = `🔄 Ralph iteration ${state.iteration} | Task ${nextTaskNum}/${plan.tasks.length} (${completedCount} complete)`
@@ -814,8 +835,8 @@ Example: Start a loop to build a REST API that runs until "DONE" is output.`,
             return `Error: A Ralph loop is already active (iteration ${existingState.iteration}). Use the rw-cancel tool to cancel it first.`
           }
 
-          // Get session ID from tool context if available
-          const sessionId = (toolCtx as { sessionId?: string })?.sessionId || null
+          // Get session ID from tool context
+          const sessionId = (toolCtx as { sessionID?: string })?.sessionID || null
 
           // Create state file
           const state: RalphState = {
@@ -836,15 +857,14 @@ Max iterations: ${maxIterations > 0 ? maxIterations : "unlimited"}
 Completion promise: ${
             completionPromise
               ? `${completionPromise} (ONLY output when TRUE - do not lie!)`
-              : "none (runs forever)"
+              : "none (loop will stop at max iterations)"
           }
 
 The loop is now active. When the session becomes idle, the SAME PROMPT will be
 fed back to you. You'll see your previous work in files, creating a
 self-referential loop where you iteratively improve on the same task.
 
-⚠️  WARNING: This loop cannot be stopped manually! It will run infinitely
-unless you set maxIterations or completionPromise.
+To stop the loop early, use rw-cancel.
 
 ---
 
@@ -958,30 +978,69 @@ Loop continues at iteration ${state.iteration}.`
         description: `Create or view a PLAN.md file for structured task management.
 
 Usage:
-- Without arguments: Creates a new PLAN.md from template
-- With 'view': Shows the current plan and its tasks
-- With description: Creates a customized plan based on your description
+- 'create': Prepares a plan (returns target path - you generate and show the plan content to the user)
+- 'view': Shows the current plan and its tasks
+- 'save': Saves the provided content to the plan file
 
 The plan file uses a simple markdown format with checkboxes for tasks.
 You can set a completion_promise in the file that Ralph will use.
 
-Example: rw-plan with description "Build a REST API with auth and tests"`,
+Filename generation (in priority order):
+1. Explicit 'file' parameter if provided
+2. Slugified 'name' parameter (e.g., "My API" → my-api.md)
+3. Slugified 'description' parameter
+4. Falls back to "plan.md"
+
+Plans are stored in .opencode/plans/ by default, allowing multiple named plans.
+
+WORKFLOW:
+1. User asks for a plan (e.g., "Create a plan for a REST API")
+2. Call rw-plan with action='create' and name/description to get the target file path
+3. Generate an appropriate plan based on the user's request and show it to them
+4. User may request changes - refine the plan in conversation
+5. When user approves, call rw-plan with action='save' and content=<the plan>
+
+PLAN FORMAT:
+The plan should be markdown with:
+- # Title
+- ## Overview section with project context
+- ## Tasks section with checkbox items: - [ ] **Task title**
+- Optional: completion_promise: SOME_PHRASE (for auto-completion detection)`,
         args: {
           action: tool.schema
             .string()
             .optional()
-            .describe("Action: 'create', 'view', or leave empty for create"),
+            .describe(
+              "Action: 'create' (prepare plan), 'view' (show existing), 'save' (write to disk)",
+            ),
+          name: tool.schema
+            .string()
+            .optional()
+            .describe("Plan name - used to generate filename (e.g., 'My API' → my-api.md)"),
           description: tool.schema
             .string()
             .optional()
-            .describe("Project description to customize the plan template"),
+            .describe("Project description (also used for filename if no name)"),
           file: tool.schema
             .string()
             .optional()
-            .describe(`Plan file path (default: ${DEFAULT_PLAN_FILE})`),
+            .describe(`Explicit plan file path (overrides auto-generated name)`),
+          content: tool.schema
+            .string()
+            .optional()
+            .describe("Plan content to save (required when action='save')"),
         },
         async execute(args) {
-          const planFile = args.file || DEFAULT_PLAN_FILE
+          // Generate filename: file > name > description > "plan.md"
+          let planFile: string
+          if (args.file) {
+            planFile = args.file
+          } else {
+            const baseName = args.name || args.description
+            const slug = baseName ? slugify(baseName) : "plan"
+            planFile = `${DEFAULT_PLAN_DIR}/${slug || "plan"}.md`
+          }
+
           const action = args.action || "create"
 
           if (action === "view") {
@@ -1011,34 +1070,40 @@ Example: rw-plan with description "Build a REST API with auth and tests"`,
             return output
           }
 
-          // Create action
+          // Save action - write content to disk
+          if (action === "save") {
+            if (!args.content || args.content.trim() === "") {
+              return `Error: No content provided. Use content parameter to specify the plan content to save.`
+            }
+
+            const existingContent = await readPlanFile(directory, planFile)
+            if (existingContent) {
+              return `Plan file already exists at ${planFile}. Delete it first to create a new one, or use a different filename.`
+            }
+
+            await writePlanFile(directory, planFile, args.content)
+
+            return `Saved plan to ${planFile}
+
+You can now use:
+- rw-tasks: List all tasks
+- rw-start: Start the Ralph loop with this plan
+- rw-task <num>: Execute a single task`
+          }
+
+          // Create action - return target path for assistant to generate plan content
           const existingContent = await readPlanFile(directory, planFile)
           if (existingContent) {
             return `Plan file already exists at ${planFile}. Use rw-plan with action='view' to see it, or delete it first to create a new one.`
           }
 
-          let template = PLAN_TEMPLATE
-          if (args.description) {
-            // Customize template with user's description
-            template = template.replace(
-              "Describe your project goals and context here.",
-              args.description,
-            )
-          }
+          return `Ready to create plan.
 
-          await writePlanFile(directory, planFile, template)
+Target file: ${planFile}
 
-          return `📝 Created ${planFile}
-
-The plan file has been created with a template. Edit it to:
-1. Add your project title and overview
-2. Define your tasks with checkboxes
-3. Optionally set a completion_promise
-
-Then use:
-- rw-tasks: List all tasks
-- rw-start: Start the Ralph loop with this plan
-- rw-task <id>: Execute a single task`
+Generate a plan for the user based on their request, then show it to them.
+When they approve (or after any revisions), save it with:
+  rw-plan action='save' file='${planFile}' content=<plan content>`
         },
       }),
 
@@ -1150,7 +1215,7 @@ No git commit is created - you can review the changes and commit manually.`,
           }
 
           // Get session ID from tool context
-          const sessionId = (toolCtx as { sessionId?: string })?.sessionId || null
+          const sessionId = (toolCtx as { sessionID?: string })?.sessionID || null
 
           // Create state for single-task mode
           const state: RalphState = {
@@ -1168,11 +1233,38 @@ No git commit is created - you can review the changes and commit manually.`,
           }
           await writeState(directory, state)
 
+          // Detect project tools for the prompt
+          const projectTools = await detectProjectTools(directory)
+          const toolsInfo: string[] = []
+          const toolsUsage: string[] = []
+          if (projectTools.hasJustfile) {
+            toolsInfo.push("`just` (justfile)")
+            toolsUsage.push(
+              "- Run `just` to see all available tasks, then use `just <task>` for build/test/format",
+            )
+          }
+          if (projectTools.hasPackageJson) {
+            toolsInfo.push("`npm`/`bun` (package.json)")
+            toolsUsage.push(
+              "- Use `npm run <script>` or `bun run <script>` for package.json scripts",
+            )
+          }
+          if (projectTools.hasMakefile) {
+            toolsInfo.push("`make` (Makefile)")
+            toolsUsage.push("- Use `make <target>` for Makefile targets")
+          }
+          let toolsSection = ""
+          if (toolsInfo.length > 0) {
+            toolsSection = `\n## Available Tools\nThis project has: ${toolsInfo.join(", ")}\n\n`
+            toolsSection += `**IMPORTANT**: Use these project tools for build, test, and other operations:\n`
+            toolsSection += toolsUsage.join("\n") + "\n"
+          }
+
           // Generate a focused prompt for this single task
           const taskPrompt = `# Single Task Execution
 
 **Plan:** ${plan.title || planFile}
-
+${toolsSection}
 ## Current Task
 
 **${task.title}**
@@ -1314,10 +1406,17 @@ To get started:
           const firstTask = plan.tasks[firstPendingIdx]
           const firstTaskNum = firstPendingIdx + 1
 
-          // Build a prompt focused on the current task
-          const taskPrompt = generateSingleTaskPrompt(plan, firstTask, firstTaskNum, true)
+          // Detect project tools and build a prompt focused on the current task
+          const projectTools = await detectProjectTools(directory)
+          const taskPrompt = generateSingleTaskPrompt(
+            plan,
+            firstTask,
+            firstTaskNum,
+            true,
+            projectTools,
+          )
           const completionPromise = plan.completionPromise || null
-          const sessionId = (toolCtx as { sessionId?: string })?.sessionId || null
+          const sessionId = (toolCtx as { sessionID?: string })?.sessionID || null
 
           // Create state with loop mode
           const state: RalphState = {
