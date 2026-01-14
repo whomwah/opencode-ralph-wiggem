@@ -1,6 +1,6 @@
 # Nelson Muntz Plugin for OpenCode (⚠️ work in progress, use at your own risk ⚠️)
 
-Plan-based iterative development loops for OpenCode. Create structured plans, execute tasks automatically, and commit progress as you go.
+Plan-based iterative development loops for [OpenCode](https://opencode.ai). Create structured plans, execute tasks automatically, and commit progress as you go.
 
 > **Why "Nelson Muntz"?** This plugin is loosely based on the [Ralph Wiggum](https://ghuntley.com/ralph/) technique - a simple bash loop that repeatedly feeds an AI agent a prompt until completion. Nelson takes that core idea but adds structured planning, task tracking, and git integration. Since it's evolved beyond the original concept, it got its own Simpsons character. Ha-ha!
 
