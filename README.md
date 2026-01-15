@@ -47,7 +47,7 @@ Add the plugin to your `opencode.json`:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nelson-muntz"]
+  "plugin": ["@whomwah/opencode-nelson-muntz"]
 }
 ```
 
