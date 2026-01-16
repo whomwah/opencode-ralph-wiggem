@@ -1,5 +1,4 @@
 import { tool } from "@opencode-ai/plugin"
-import * as path from "node:path"
 import type { NelsonState, PlanTask } from "./types"
 import { readState, writeState } from "./state"
 import { slugify, detectProjectTools } from "./utils"
@@ -10,6 +9,8 @@ import {
   writePlanFile,
   parsePlanFile,
   updateTaskStatus,
+  resolvePlanFile,
+  listPlanFiles,
 } from "./plan"
 import { generateSingleTaskPrompt } from "./prompts"
 
@@ -17,6 +18,25 @@ import { generateSingleTaskPrompt } from "./prompts"
  * Create plan-related tools for Nelson Muntz
  */
 export function createPlanTools(directory: string) {
+  /**
+   * Format a "plan not found" error message with available plan suggestions
+   */
+  async function formatPlanNotFoundError(planFile: string): Promise<string> {
+    const availablePlans = await listPlanFiles(directory)
+
+    let message = `No plan file found at ${planFile}.`
+
+    if (availablePlans.length > 0) {
+      const planNames = availablePlans.map((p) => p.name).join(", ")
+      message += `\n\nAvailable plans: ${planNames}`
+      message += `\n\nUse one of these with the 'name' parameter, or create a new plan with nm-plan.`
+    } else {
+      message += `\n\nNo plans found in ${DEFAULT_PLAN_DIR}/. Use nm-plan to create one.`
+    }
+
+    return message
+  }
+
   return {
     "nm-plan": tool({
       description: `Create or view a ${DEFAULT_PLAN_FILE} file for structured task management.
@@ -90,7 +110,7 @@ The plan should be markdown with:
         if (action === "view") {
           const content = await readPlanFile(directory, planFile)
           if (!content) {
-            return `No plan file found at ${planFile}. Use nm-plan to create one.`
+            return await formatPlanNotFoundError(planFile)
           }
 
           const plan = parsePlanFile(content)
@@ -151,47 +171,71 @@ When they approve (or after any revisions), save it with:
       },
     }),
 
+    "nm-plans": tool({
+      description: `List all plan files in ${DEFAULT_PLAN_DIR}.
+
+Shows available plans that can be used with other nm-* tools.
+Use the plan name with the 'name' parameter in nm-tasks, nm-task, nm-start, etc.`,
+      args: {},
+      async execute() {
+        const plans = await listPlanFiles(directory)
+
+        if (plans.length === 0) {
+          return `No plans found in ${DEFAULT_PLAN_DIR}/.\n\nCreate a plan with: nm-plan create name="my-plan"`
+        }
+
+        let output = `📋 Available plans in ${DEFAULT_PLAN_DIR}/\n\n`
+
+        for (const plan of plans) {
+          const content = await readPlanFile(directory, plan.path)
+          if (content) {
+            const parsed = parsePlanFile(content)
+            const completed = parsed.tasks.filter((t) => t.status === "completed").length
+            const total = parsed.tasks.length
+            const progress = total > 0 ? `${completed}/${total} tasks` : "no tasks"
+            output += `• ${plan.name} (${progress})\n`
+          } else {
+            output += `• ${plan.name}\n`
+          }
+        }
+
+        output += `\nUsage:\n`
+        output += `• nm-tasks name="plan-name"  List tasks in a plan\n`
+        output += `• nm-task 1 name="plan-name" Execute task #1\n`
+        output += `• nm-start name="plan-name"  Start loop for all tasks`
+
+        return output
+      },
+    }),
+
     "nm-tasks": tool({
       description: `List all tasks from ${DEFAULT_PLAN_DIR}.
 
 Shows task IDs, titles, and completion status. Use the task ID or number
-with nm-task to execute a specific task.`,
+with nm-task to execute a specific task.
+
+You can specify the plan by:
+- name: A plan name like "rest-api" or "My API" (resolves to .opencode/plans/{slug}.md)
+- file: An explicit file path like ".opencode/plans/custom.md"`,
       args: {
+        name: tool.schema
+          .string()
+          .optional()
+          .describe(
+            "Plan name (e.g., 'rest-api' or 'My API') - resolves to .opencode/plans/{slug}.md",
+          ),
         file: tool.schema
           .string()
           .optional()
           .describe(`Plan file path (default: ${DEFAULT_PLAN_FILE})`),
       },
       async execute(args) {
-        const planFile = args.file || DEFAULT_PLAN_FILE
+        // Resolve plan file: name takes precedence over file, then default
+        const planFile = args.name ? resolvePlanFile(args.name) : args.file || DEFAULT_PLAN_FILE
         const content = await readPlanFile(directory, planFile)
 
         if (!content) {
-          // Check if there are other plan files in the plans directory
-          const plansDir = path.join(directory, DEFAULT_PLAN_DIR)
-          const availablePlans: string[] = []
-          try {
-            const glob = new Bun.Glob("*.md")
-            for await (const file of glob.scan({ cwd: plansDir })) {
-              availablePlans.push(file)
-            }
-          } catch {
-            // Directory doesn't exist or can't be read
-          }
-
-          if (availablePlans.length > 0) {
-            let output = `No plan file found at ${planFile}.\n\n`
-            output += `Found ${availablePlans.length} available plan${availablePlans.length === 1 ? "" : "s"} in ${DEFAULT_PLAN_DIR}/:\n\n`
-            output += `| Plan File | Command |\n`
-            output += `|-----------|----------------------------------------------|\n`
-            for (const plan of availablePlans) {
-              output += `| ${plan} | \`nm-tasks file="${DEFAULT_PLAN_DIR}/${plan}"\` |\n`
-            }
-            output += `\nOr create a plan with \`Create me a plan that...\` in Plan mode.`
-            return output
-          }
-
-          return `No plan file found at ${planFile}. Use nm-plan to create one.`
+          return await formatPlanNotFoundError(planFile)
         }
 
         const plan = parsePlanFile(content)
@@ -228,21 +272,32 @@ with nm-task to execute a specific task.`,
 Specify task by number (1, 2, 3...) or by name/keyword.
 This runs the task ONCE without looping - useful for manual step-by-step execution.
 
+You can specify the plan by:
+- name: A plan name like "rest-api" or "My API" (resolves to .opencode/plans/{slug}.md)
+- file: An explicit file path like ".opencode/plans/custom.md"
+
 When the task completes, it will automatically be marked as done in the <plan>.md file.
 No git commit is created - you can review the changes and commit manually.`,
       args: {
         task: tool.schema.string().describe("Task number (1, 2, 3...) or task name/keyword"),
+        name: tool.schema
+          .string()
+          .optional()
+          .describe(
+            "Plan name (e.g., 'rest-api' or 'My API') - resolves to .opencode/plans/{slug}.md",
+          ),
         file: tool.schema
           .string()
           .optional()
           .describe(`Plan file path (default: ${DEFAULT_PLAN_FILE})`),
       },
       async execute(args, toolCtx) {
-        const planFile = args.file || DEFAULT_PLAN_FILE
+        // Resolve plan file: name takes precedence over file, then default
+        const planFile = args.name ? resolvePlanFile(args.name) : args.file || DEFAULT_PLAN_FILE
         const content = await readPlanFile(directory, planFile)
 
         if (!content) {
-          return `No plan file found at ${planFile}. Use nm-plan to create one.`
+          return await formatPlanNotFoundError(planFile)
         }
 
         const plan = parsePlanFile(content)
@@ -362,20 +417,31 @@ commit your changes manually when ready.`
     "nm-complete": tool({
       description: `Mark a task as complete in the PLAN.md file.
 
-Use after successfully completing a task with nm-task.`,
+Use after successfully completing a task with nm-task.
+
+You can specify the plan by:
+- name: A plan name like "rest-api" or "My API" (resolves to .opencode/plans/{slug}.md)
+- file: An explicit file path like ".opencode/plans/custom.md"`,
       args: {
         task: tool.schema.string().describe("Task number (1, 2, 3...) or task name"),
+        name: tool.schema
+          .string()
+          .optional()
+          .describe(
+            "Plan name (e.g., 'rest-api' or 'My API') - resolves to .opencode/plans/{slug}.md",
+          ),
         file: tool.schema
           .string()
           .optional()
           .describe(`Plan file path (default: ${DEFAULT_PLAN_FILE})`),
       },
       async execute(args) {
-        const planFile = args.file || DEFAULT_PLAN_FILE
+        // Resolve plan file: name takes precedence over file, then default
+        const planFile = args.name ? resolvePlanFile(args.name) : args.file || DEFAULT_PLAN_FILE
         const content = await readPlanFile(directory, planFile)
 
         if (!content) {
-          return `No plan file found at ${planFile}.`
+          return await formatPlanNotFoundError(planFile)
         }
 
         const plan = parsePlanFile(content)
@@ -419,6 +485,10 @@ Use after successfully completing a task with nm-task.`,
 This is the simplest way to start Nelson - just say "start nelson loop" or use this tool.
 It reads your PLAN.md, builds a prompt from all pending tasks, and starts iterating.
 
+You can specify the plan by:
+- name: A plan name like "rest-api" or "My API" (resolves to .opencode/plans/{slug}.md)
+- file: An explicit file path like ".opencode/plans/custom.md"
+
 The loop will:
 1. Read the plan file and extract all pending tasks
 2. Work through each task one at a time
@@ -427,6 +497,12 @@ The loop will:
 
 Each task gets its own git commit, so you can review them separately later.`,
       args: {
+        name: tool.schema
+          .string()
+          .optional()
+          .describe(
+            "Plan name (e.g., 'rest-api' or 'My API') - resolves to .opencode/plans/{slug}.md",
+          ),
         file: tool.schema
           .string()
           .optional()
@@ -437,17 +513,13 @@ Each task gets its own git commit, so you can review them separately later.`,
           .describe("Maximum iterations (default: 0 = unlimited)"),
       },
       async execute(args, toolCtx) {
-        const planFile = args.file || DEFAULT_PLAN_FILE
+        // Resolve plan file: name takes precedence over file, then default
+        const planFile = args.name ? resolvePlanFile(args.name) : args.file || DEFAULT_PLAN_FILE
         const maxIterations = args.maxIterations ?? 0
         const content = await readPlanFile(directory, planFile)
 
         if (!content) {
-          return `No plan file found at ${planFile}.
-
-To get started:
-1. Use nm-plan to create a plan file
-2. Edit the plan with your tasks
-3. Run nm-start again`
+          return await formatPlanNotFoundError(planFile)
         }
 
         const plan = parsePlanFile(content)

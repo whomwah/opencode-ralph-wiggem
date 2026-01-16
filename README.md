@@ -140,6 +140,7 @@ When the plugin is installed you can ask opencode for all "nm-\* tasks" and it w
 | Tool          | Description                                       |
 | ------------- | ------------------------------------------------- |
 | `nm-plan`     | Create or view a PLAN.md file                     |
+| `nm-plans`    | List all available plan files                     |
 | `nm-start`    | Start loop from PLAN.md (auto-commits per task)   |
 | `nm-tasks`    | List all tasks from the plan                      |
 | `nm-task`     | Execute a single task (auto-completes, no commit) |
@@ -158,10 +159,13 @@ When the plugin is installed you can ask opencode for all "nm-\* tasks" and it w
 
 #### nm-start
 
-| Parameter       | Type   | Required | Description                                       |
-| --------------- | ------ | -------- | ------------------------------------------------- |
-| `file`          | string | No       | Plan file path (default: .opencode/plans/PLAN.md) |
-| `maxIterations` | number | No       | Max iterations (default: 0 = unlimited)           |
+| Parameter       | Type   | Required | Description                                                                      |
+| --------------- | ------ | -------- | -------------------------------------------------------------------------------- |
+| `name`          | string | No       | Plan name (e.g., 'rest-api' or 'My API') - resolves to .opencode/plans/{slug}.md |
+| `file`          | string | No       | Explicit plan file path (default: .opencode/plans/PLAN.md)                       |
+| `maxIterations` | number | No       | Max iterations (default: 0 = unlimited)                                          |
+
+You can specify the plan by name or file path. If both are provided, `name` takes precedence.
 
 #### nm-plan
 
@@ -184,10 +188,26 @@ All plans are stored in `.opencode/plans/` by default.
 
 #### nm-task
 
-| Parameter | Type   | Required | Description                                       |
-| --------- | ------ | -------- | ------------------------------------------------- |
-| `task`    | string | Yes      | Task number (1, 2, 3...) or name                  |
-| `file`    | string | No       | Plan file path (default: .opencode/plans/PLAN.md) |
+| Parameter | Type   | Required | Description                                                                      |
+| --------- | ------ | -------- | -------------------------------------------------------------------------------- |
+| `task`    | string | Yes      | Task number (1, 2, 3...) or name                                                 |
+| `name`    | string | No       | Plan name (e.g., 'rest-api' or 'My API') - resolves to .opencode/plans/{slug}.md |
+| `file`    | string | No       | Explicit plan file path (default: .opencode/plans/PLAN.md)                       |
+
+#### nm-tasks
+
+| Parameter | Type   | Required | Description                                                                      |
+| --------- | ------ | -------- | -------------------------------------------------------------------------------- |
+| `name`    | string | No       | Plan name (e.g., 'rest-api' or 'My API') - resolves to .opencode/plans/{slug}.md |
+| `file`    | string | No       | Explicit plan file path (default: .opencode/plans/PLAN.md)                       |
+
+#### nm-complete
+
+| Parameter | Type   | Required | Description                                                                      |
+| --------- | ------ | -------- | -------------------------------------------------------------------------------- |
+| `task`    | string | Yes      | Task number (1, 2, 3...) or name                                                 |
+| `name`    | string | No       | Plan name (e.g., 'rest-api' or 'My API') - resolves to .opencode/plans/{slug}.md |
+| `file`    | string | No       | Explicit plan file path (default: .opencode/plans/PLAN.md)                       |
 
 #### nm-loop
 
