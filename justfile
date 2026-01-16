@@ -15,26 +15,30 @@ build:
 
 # Generate TypeScript declarations
 build-types:
-    tsc --emitDeclarationOnly
+    bunx tsc --emitDeclarationOnly
 
 # Build everything (code + types)
 build-all: build build-types
 
 # Run TypeScript type checking
 typecheck:
-    tsc --noEmit
+    bunx tsc --noEmit
+
+# Run tests
+test:
+    bun test
 
 # Format all files with Prettier
 format:
-    bun run format
+    bunx prettier --write .
 
 # Check formatting without modifying files
 format-check:
-    bun run format:check
+    bunx prettier --check .
 
 # Watch mode - rebuilds on changes
 dev:
-    bun run build --watch
+    bun build src/index.ts --outdir dist --target bun --watch
 
 # Symlink plugin to global OpenCode plugins (~/.config/opencode/plugin/)
 link-local:
