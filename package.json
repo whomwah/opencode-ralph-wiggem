@@ -19,13 +19,7 @@
     "src"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun",
-    "build:types": "tsc --emitDeclarationOnly",
-    "prepublishOnly": "bun run build && bun run build:types",
-    "dev": "bun run build --watch",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "prepublishOnly": "bun build src/index.ts --outdir dist --target bun && bunx tsc --emitDeclarationOnly"
   },
   "keywords": [
     "opencode",
